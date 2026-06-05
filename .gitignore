@@ -1,0 +1,14 @@
+.pytest_cache/
+__pycache__/
+*.pyc
+.venv/
+.env
+reports/output/
+schema_cache/
+.spreadsheet-work/
+.tmp/
+outputs/
+customer-feedback-bugs.csv
+dashboard-bugs.csv
+review-export-current-bugs.csv
+review-export-current-bugs-*.csv

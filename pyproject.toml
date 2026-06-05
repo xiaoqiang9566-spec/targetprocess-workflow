@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tp-codex"
+version = "0.1.0"
+description = "Read-only Targetprocess automation toolkit for QA workflows"
+requires-python = ">=3.9"
+dependencies = ["PyYAML>=6.0"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+markers = [
+  "live: requires a real Targetprocess environment",
+]
+testpaths = ["tests"]

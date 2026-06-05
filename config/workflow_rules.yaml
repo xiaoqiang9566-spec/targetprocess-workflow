@@ -1,0 +1,43 @@
+status_groups:
+  triage:
+    - New
+    - Reproduce
+  in_progress:
+    - In Progress
+    - In Review
+  ready_for_qa:
+    - In Testing
+  closed:
+    - Verified
+    - Invalid
+    - Wont fix
+high_risk_severities:
+  - Critical
+  - Blocking
+stale_days: 5
+reopen_threshold: 2
+default_scope:
+  project:
+    - Suunto work
+  team:
+    - ESW China NG3 Driver
+    - ESW China NG3 Framework
+    - ESW UI Team
+default_select:
+  - Id
+  - Name
+  - CreateDate
+  - ModifyDate
+  - LastStateChangeDate
+  - Team
+  - Project
+  - Severity
+  - EntityState
+  - Owner
+  - Suuntoappversion
+  - Suuntoappplatform
+  - Products
+  - Firmwareversion
+  - Reproducibility
+  - Feature
+  - BugCategory

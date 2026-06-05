@@ -1,0 +1,9 @@
+base_url: "https://suunto.tpondemand.com"
+auth_mode: "auto"
+access_token: ""
+service_token: ""
+username: ""
+password: ""
+timeout_sec: 30
+page_size: 1000
+run_live_tests: 0
