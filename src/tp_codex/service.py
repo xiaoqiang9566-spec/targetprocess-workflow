@@ -5,9 +5,15 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from tp_codex.artifacts import WorkflowArtifact
-from tp_codex.datasets import BUG_DATASET_FIELDNAMES, BUG_DATASET_SELECT_FIELDS, build_bug_dataset_records
+from tp_codex.datasets import (
+    BUG_DATASET_SELECT_FIELDS,
+    build_bug_dataset_fieldnames,
+    build_bug_dataset_records,
+    build_review_export_fieldnames,
+    summarize_bug_history,
+)
 from tp_codex.errors import UpstreamOrTimeoutError
-from tp_codex.history import get_bug_history
+from tp_codex.history import get_bug_history, get_bug_simple_history_batch
 from tp_codex.monthly_audits import (
     MONTHLY_AUDIT_SHEET_NAMES,
     build_monthly_audit_candidates,
@@ -76,7 +82,7 @@ class TargetprocessService:
             bug_id = str(filters["bug_id"])
             return self._bug_history(bug_id)
         if workflow == "build-dataset":
-            return self._build_dataset(entity, filters, limit)
+            return self._build_dataset(entity, filters, limit, history_mode=history_mode, include_status_timestamps=True)
         if workflow == "build-workbook":
             return self._build_workbook(entity, filters, limit)
         if workflow == "weekly-report":
@@ -117,11 +123,21 @@ class TargetprocessService:
         filters = self._merge_default_bug_filters(filters)
         query = list_entities(self.gateway, entity, filters=filters, limit=limit)
         warnings: list[str] = ["partial_entities"] if query.partial else []
-        should_fetch_history = workflow in {"triage-view", "risk-scan", "review-export"} and (history_mode or "off") == "full"
+        include_history = workflow in {"triage-view", "risk-scan", "review-export"} and (history_mode or "off") == "full"
+        summarize_history = workflow == "review-export"
         records = []
         for item in query.items:
             normalized = self.rules.enrich_record(normalize_bug(item, self.settings.base_url))
-            if should_fetch_history:
+            if summarize_history and include_history:
+                try:
+                    history, partial = get_bug_history(self.gateway, str(normalized["bug_id"]))
+                except UpstreamOrTimeoutError:
+                    history = []
+                    partial = True
+                normalized = summarize_bug_history(normalized, history, include_history=include_history)
+                if partial:
+                    warnings.append("partial_history")
+            elif include_history:
                 try:
                     history, partial = get_bug_history(self.gateway, str(normalized["bug_id"]))
                 except UpstreamOrTimeoutError:
@@ -135,15 +151,48 @@ class TargetprocessService:
             if workflow == "risk-scan" and not normalized["risk_signals"]:
                 continue
             records.append(normalized)
-        return self._result(workflow, entity, filters, records, warnings, query.total_count)
+        if summarize_history and not include_history:
+            records, partial = self._summarize_records_with_bug_simple_history(records, recompute_reopen_count=False)
+            if partial:
+                warnings.append("partial_history")
+        result = self._result(workflow, entity, filters, records, warnings, query.total_count)
+        if workflow == "review-export":
+            result.metadata["csv_fieldnames"] = build_review_export_fieldnames(records)
+            result.metadata["history_mode"] = history_mode or "off"
+        return result
 
-    def _build_dataset(self, entity: str, filters: Optional[dict], limit: Optional[int]) -> WorkflowResult:
+    def _build_dataset(
+        self,
+        entity: str,
+        filters: Optional[dict],
+        limit: Optional[int],
+        history_mode: Optional[str] = None,
+        include_status_timestamps: bool = False,
+    ) -> WorkflowResult:
         dataset_filters = dict(filters or {})
         dataset_filters["select"] = self._format_select(BUG_DATASET_SELECT_FIELDS)
         dataset_filters = self._merge_default_bug_filters(dataset_filters)
         query = list_entities(self.gateway, entity, filters=dataset_filters, limit=limit)
         warnings: list[str] = ["partial_entities"] if query.partial else []
-        base_records = [self.rules.enrich_record(normalize_bug(item, self.settings.base_url)) for item in query.items]
+        include_history = (history_mode or "off") == "full"
+        base_records = []
+        for item in query.items:
+            normalized = self.rules.enrich_record(normalize_bug(item, self.settings.base_url))
+            if include_status_timestamps:
+                if include_history:
+                    try:
+                        history, partial = get_bug_history(self.gateway, str(normalized["bug_id"]))
+                    except UpstreamOrTimeoutError:
+                        history = []
+                        partial = True
+                    normalized["history"] = history
+                    if partial:
+                        warnings.append("partial_history")
+            base_records.append(normalized)
+        if include_status_timestamps and not include_history:
+            base_records, partial = self._summarize_records_with_bug_simple_history(base_records, recompute_reopen_count=True)
+            if partial:
+                warnings.append("partial_history")
         records = build_bug_dataset_records(base_records, self.settings.workflow_rules, datetime.now(timezone.utc))
         signals: list[dict] = []
         for record in records:
@@ -158,16 +207,38 @@ class TargetprocessService:
             "customer_feedback_records": sum(1 for record in records if record.get("is_customer_feedback")),
         }
         metadata = self._metadata(entity, dataset_filters or {})
-        metadata["csv_fieldnames"] = BUG_DATASET_FIELDNAMES
-        metadata["dataset_version"] = "1.0"
+        metadata["csv_fieldnames"] = build_bug_dataset_fieldnames(records)
+        metadata["dataset_version"] = "1.1" if include_status_timestamps else "1.0"
+        metadata["history_mode"] = history_mode or "off"
         return WorkflowResult(
             workflow="build-dataset",
             metadata=metadata,
             records=records,
             signals=self._dedupe_signals(signals),
             summary=summary,
-            warnings=warnings,
+            warnings=sorted(set(warnings)),
         )
+
+    def _summarize_records_with_bug_simple_history(
+        self,
+        records: List[dict],
+        *,
+        recompute_reopen_count: bool,
+    ) -> tuple[List[dict], bool]:
+        histories_by_bug_id, partial = get_bug_simple_history_batch(
+            self.gateway,
+            [record.get("bug_id") for record in records],
+        )
+        summarized_records = [
+            summarize_bug_history(
+                record,
+                histories_by_bug_id.get(str(record.get("bug_id")), []),
+                include_history=False,
+                recompute_reopen_count=recompute_reopen_count,
+            )
+            for record in records
+        ]
+        return summarized_records, partial
 
     def _build_workbook(self, entity: str, filters: Optional[dict], limit: Optional[int]) -> WorkflowResult:
         dataset_result = self._build_dataset(entity, filters, limit)

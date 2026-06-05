@@ -94,6 +94,7 @@
 - 本项目“全量 bug”或“当前 bug”默认使用 `python -m tp_codex.cli bugs review-export`。
 - “全量”表示 `config/workflow_rules.yaml` 中默认 scope 内的所有 bug 记录，不自动过滤为 open 状态。
 - 默认团队范围是 `ESW China NG3 Driver`、`ESW China NG3 Framework`、`ESW UI Team`。
+- 默认全量导出应直接给出“首次进入各状态时间”列，不要求用户显式加 `--history-mode full`。
 - “售后 bug”使用相同三团队默认范围，并筛选 tag 为 `customer feedback` 的 bug。
 
 经验教训：
@@ -129,8 +130,9 @@
 
 正确执行方式：
 
-- `triage-view`、`risk-scan`、`review-export` 默认使用 `--history-mode off`。
-- 只有用户明确需要嵌入每个 bug 的 history 时，才使用 `--history-mode full`。
+- `triage-view`、`risk-scan` 默认使用 `--history-mode off`。
+- `review-export` 和直接 `build-dataset` 导出默认应批量查询 `BugSimpleHistory` 风格的状态快照来推导“首次进入各状态时间”，但默认结果里不暴露原始 `history`。
+- 只有用户明确需要嵌入每个 bug 的 history 明细，或在做专项样本分析时，才使用 `--history-mode full`。
 - `bugs history --bug-id <ID>` 是单 bug 详情路径。
 - 对 `full` 模式的大批量使用必须重新测量，不把它当作常规默认路径。
 

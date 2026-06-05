@@ -1,3 +1,4 @@
+import csv
 import io
 import json
 import sys
@@ -71,6 +72,14 @@ def test_build_parser_includes_reports_build_dataset_command():
     assert args.command == "reports"
     assert args.reports_command == "build-dataset"
     assert args.format == "csv"
+
+
+def test_build_parser_build_dataset_accepts_history_mode():
+    parser = build_parser()
+
+    args = parser.parse_args(["reports", "build-dataset", "--history-mode", "full"])
+
+    assert args.history_mode == "full"
 
 
 def test_build_parser_includes_reports_build_workbook_command():
@@ -457,9 +466,22 @@ def test_cli_review_export_outputs_expanded_csv(capsys):
                     "CreateDate": "2026-06-01T00:00:00+00:00",
                     "ModifyDate": "2026-06-03T00:00:00+00:00",
                 }
-            ]
-        }
+            ],
+                "BugSimpleHistory": [
+                    {
+                        "Date": "2026-06-01T00:00:00+00:00",
+                        "EntityState": {"Name": "New"},
+                        "Bug": {"Id": 101, "Name": "Crash on launch"},
+                    },
+                    {
+                        "Date": "2026-06-02T00:00:00+00:00",
+                        "EntityState": {"Name": "Ready for QA"},
+                        "Bug": {"Id": 101, "Name": "Crash on launch"},
+                    }
+            ],
+        },
     )
+    gateway.bug_history = lambda bug_id: (_ for _ in ()).throw(AssertionError("default review-export should not call bug_history"))
     settings = Settings(
         base_url="https://example.tpondemand.com",
         auth=AuthSettings(mode="access_token", secret="token"),
@@ -474,8 +496,123 @@ def test_cli_review_export_outputs_expanded_csv(capsys):
 
     assert exit_code == 0
     payload = capsys.readouterr().out
-    assert "bug_id,name,status_raw,status_group,severity,owner,updated_at,team,suunto_app_version,suunto_app_platform,products,firmware_version,reproducibility,bug_category,linked_feature_ids" in payload
-    assert "101,Crash on launch,Ready for QA,ready_for_qa,High,QA User,2026-06-03T00:00:00+00:00,ESW UI Team,2.0.1,Android,Watch A; Watch B,FW-9.8.7,Always,Regression,501; 502" in payload
+    row = next(csv.DictReader(io.StringIO(payload)))
+    assert row["bug_id"] == "101"
+    assert row["status_group"] == "ready_for_qa"
+    assert row["entered_new_at"] == "2026-06-01T00:00:00+00:00"
+    assert row["entered_ready_for_qa_at"] == "2026-06-02T00:00:00+00:00"
+    assert row["linked_feature_ids"] == "501; 502"
+
+
+def test_cli_review_export_default_json_omits_history_but_includes_status_timestamps(capsys):
+    gateway = MemoryGateway(
+        entities={
+            "Bug": [
+                {
+                    "Id": 101,
+                    "Name": "Crash on launch",
+                    "EntityType": {"Name": "Bug"},
+                    "Severity": {"Name": "High"},
+                    "EntityState": {"Name": "Ready for QA"},
+                    "Owner": {"FirstName": "QA", "LastName": "User"},
+                    "Team": {"Name": "ESW UI Team"},
+                    "CreateDate": "2026-06-01T00:00:00+00:00",
+                    "ModifyDate": "2026-06-03T00:00:00+00:00",
+                }
+            ],
+                "BugSimpleHistory": [
+                    {
+                        "Date": "2026-06-01T00:00:00+00:00",
+                        "EntityState": {"Name": "New"},
+                        "Bug": {"Id": 101, "Name": "Crash on launch"},
+                    },
+                    {
+                        "Date": "2026-06-02T00:00:00+00:00",
+                        "EntityState": {"Name": "Ready for QA"},
+                        "Bug": {"Id": 101, "Name": "Crash on launch"},
+                    }
+            ],
+        },
+    )
+    gateway.bug_history = lambda bug_id: (_ for _ in ()).throw(AssertionError("default review-export should not call bug_history"))
+    settings = Settings(
+        base_url="https://example.tpondemand.com",
+        auth=AuthSettings(mode="access_token", secret="token"),
+        workflow_rules=WorkflowRulesSettings(status_groups={"ready_for_qa": ["Ready for QA"]}),
+    )
+
+    exit_code = run_cli(
+        ["bugs", "review-export", "--format", "json"],
+        settings=settings,
+        gateway=gateway,
+    )
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    record = payload["records"][0]
+    assert "history" not in record
+    assert record["entered_new_at"] == "2026-06-01T00:00:00+00:00"
+    assert record["entered_ready_for_qa_at"] == "2026-06-02T00:00:00+00:00"
+
+
+def test_cli_review_export_full_history_mode_keeps_history_and_status_timestamps(capsys):
+    gateway = MemoryGateway(
+        entities={
+            "Bug": [
+                {
+                    "Id": 101,
+                    "Name": "Crash on launch",
+                    "EntityType": {"Name": "Bug"},
+                    "Severity": {"Name": "High"},
+                    "EntityState": {"Name": "Ready for QA"},
+                    "Owner": {"FirstName": "QA", "LastName": "User"},
+                    "Team": {"Name": "ESW UI Team"},
+                    "CreateDate": "2026-06-01T00:00:00+00:00",
+                    "ModifyDate": "2026-06-03T00:00:00+00:00",
+                }
+            ]
+        },
+        history={
+            "101": [
+                {
+                    "Date": "2026-06-02T00:00:00+00:00",
+                    "Field": "EntityState",
+                    "OldValue": "New",
+                    "NewValue": "Ready for QA",
+                }
+            ]
+        },
+    )
+    settings = Settings(
+        base_url="https://example.tpondemand.com",
+        auth=AuthSettings(mode="access_token", secret="token"),
+        workflow_rules=WorkflowRulesSettings(status_groups={"ready_for_qa": ["Ready for QA"]}),
+    )
+
+    exit_code = run_cli(
+        ["bugs", "review-export", "--history-mode", "full", "--format", "json"],
+        settings=settings,
+        gateway=gateway,
+    )
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    record = payload["records"][0]
+    assert record["entered_new_at"] == "2026-06-01T00:00:00+00:00"
+    assert record["entered_ready_for_qa_at"] == "2026-06-02T00:00:00+00:00"
+    assert record["history"] == [
+        {
+            "event_type": "unknown",
+            "changed_at": "2026-06-02T00:00:00+00:00",
+            "field": "EntityState",
+            "from": "New",
+            "to": "Ready for QA",
+            "modifier": None,
+            "release": None,
+            "iteration": None,
+            "project": None,
+        }
+    ]
 
 
 def test_cli_build_dataset_outputs_csv_with_reporting_columns(capsys):
@@ -498,9 +635,16 @@ def test_cli_build_dataset_outputs_csv_with_reporting_columns(capsys):
                     "ReopenCount": 1,
                     "Tags": [{"Name": "customer feedback"}],
                 }
-            ]
-        }
-    )
+            ],
+                "BugSimpleHistory": [
+                    {"Date": "2026-05-26T00:00:00+00:00", "EntityState": {"Name": "New"}, "Bug": {"Id": 101}},
+                    {"Date": "2026-05-28T00:00:00+00:00", "EntityState": {"Name": "In Progress"}, "Bug": {"Id": 101}},
+                    {"Date": "2026-05-29T00:00:00+00:00", "EntityState": {"Name": "In Testing"}, "Bug": {"Id": 101}},
+                    {"Date": "2026-05-30T00:00:00+00:00", "EntityState": {"Name": "New"}, "Bug": {"Id": 101}},
+                ],
+            },
+        )
+    gateway.bug_history = lambda bug_id: (_ for _ in ()).throw(AssertionError("default build-dataset should not call bug_history"))
     settings = Settings(
         base_url="https://example.tpondemand.com",
         auth=AuthSettings(mode="access_token", secret="token"),
@@ -520,10 +664,124 @@ def test_cli_build_dataset_outputs_csv_with_reporting_columns(capsys):
 
     assert exit_code == 0
     payload = capsys.readouterr().out
-    assert "created_week" in payload
-    assert "is_customer_feedback" in payload
-    assert "quality_bucket" in payload
-    assert "default_scope_team" in payload
+    row = next(csv.DictReader(io.StringIO(payload)))
+    assert row["created_week"] == "2026-W22"
+    assert row["is_customer_feedback"] == "True"
+    assert row["quality_bucket"] == "customer_feedback"
+    assert row["team_scope_label"] == "default_scope_team"
+    assert row["entered_new_at"] == "2026-05-26T00:00:00+00:00"
+    assert row["entered_in_progress_at"] == "2026-05-28T00:00:00+00:00"
+    assert row["entered_in_testing_at"] == "2026-05-29T00:00:00+00:00"
+    assert row["reopen_count"] == "1"
+
+
+def test_cli_build_dataset_full_history_mode_keeps_history_and_outputs_status_timestamp_columns(capsys):
+    gateway = MemoryGateway(
+        entities={
+            "Bug": [
+                {
+                    "Id": 101,
+                    "Name": "Crash on launch",
+                    "EntityType": {"Name": "Bug"},
+                    "Severity": {"Name": "Critical"},
+                    "Priority": {"Name": "High"},
+                    "EntityState": {"Name": "Verified"},
+                    "Owner": {"FirstName": "QA", "LastName": "User"},
+                    "Project": {"Name": "Suunto work"},
+                    "Team": {"Name": "ESW China NG3 Driver"},
+                    "CreateDate": "2026-06-01T00:00:00+00:00",
+                    "ModifyDate": "2026-06-05T00:00:00+00:00",
+                    "LastStateChangeDate": "2026-06-05T00:00:00+00:00",
+                    "ReopenCount": 0,
+                    "Tags": [],
+                }
+            ]
+        },
+        history={
+            "101": [
+                {"Date": "2026-06-02T00:00:00+00:00", "Field": "EntityState", "OldValue": "New", "NewValue": "In Progress"},
+                {"Date": "2026-06-03T00:00:00+00:00", "Field": "EntityState", "OldValue": "In Progress", "NewValue": "In Testing"},
+                {"Date": "2026-06-04T00:00:00+00:00", "Field": "EntityState", "OldValue": "In Testing", "NewValue": "New"},
+                {"Date": "2026-06-05T00:00:00+00:00", "Field": "EntityState", "OldValue": "New", "NewValue": "Verified"},
+            ]
+        },
+    )
+    settings = Settings(
+        base_url="https://example.tpondemand.com",
+        auth=AuthSettings(mode="access_token", secret="token"),
+        workflow_rules=WorkflowRulesSettings(
+            status_groups={
+                "triage": ["New"],
+                "in_progress": ["In Progress"],
+                "ready_for_qa": ["In Testing"],
+                "closed": ["Verified"],
+            },
+            high_risk_severities=["Critical"],
+            stale_days=5,
+            default_scope={"team": ["ESW China NG3 Driver"]},
+        ),
+    )
+
+    exit_code = run_cli(
+        ["reports", "build-dataset", "--history-mode", "full", "--format", "json"],
+        settings=settings,
+        gateway=gateway,
+    )
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    record = payload["records"][0]
+    assert record["entered_new_at"] == "2026-06-01T00:00:00+00:00"
+    assert record["entered_in_progress_at"] == "2026-06-02T00:00:00+00:00"
+    assert record["entered_in_testing_at"] == "2026-06-03T00:00:00+00:00"
+    assert record["entered_verified_at"] == "2026-06-05T00:00:00+00:00"
+    assert record["reopen_count"] == 1
+    assert record["history"] == [
+        {
+            "event_type": "unknown",
+            "changed_at": "2026-06-02T00:00:00+00:00",
+            "field": "EntityState",
+            "from": "New",
+            "to": "In Progress",
+            "modifier": None,
+            "release": None,
+            "iteration": None,
+            "project": None,
+        },
+        {
+            "event_type": "unknown",
+            "changed_at": "2026-06-03T00:00:00+00:00",
+            "field": "EntityState",
+            "from": "In Progress",
+            "to": "In Testing",
+            "modifier": None,
+            "release": None,
+            "iteration": None,
+            "project": None,
+        },
+        {
+            "event_type": "unknown",
+            "changed_at": "2026-06-04T00:00:00+00:00",
+            "field": "EntityState",
+            "from": "In Testing",
+            "to": "New",
+            "modifier": None,
+            "release": None,
+            "iteration": None,
+            "project": None,
+        },
+        {
+            "event_type": "unknown",
+            "changed_at": "2026-06-05T00:00:00+00:00",
+            "field": "EntityState",
+            "from": "New",
+            "to": "Verified",
+            "modifier": None,
+            "release": None,
+            "iteration": None,
+            "project": None,
+        },
+    ]
 
 
 def test_cli_build_workbook_requires_output_for_xlsx(capsys):

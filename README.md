@@ -58,7 +58,9 @@ python scripts/tp_history_mode_benchmark.py --limit 5
 
 `bugs intake`, `bugs triage-view`, `bugs regression-queue`, `bugs risk-scan`, and `bugs review-export` automatically apply the defaults from `config/workflow_rules.yaml`.
 
-`bugs triage-view`, `bugs risk-scan`, and `bugs review-export` default to `--history-mode off`. Use `--history-mode full` when the caller explicitly needs per-bug history in those workflow results.
+`bugs review-export` and the direct `reports build-dataset` command batch-query `BugSimpleHistory` snapshots by default to derive first-entered status timestamps, but they do not expose raw `history` unless `--history-mode full` is explicitly requested.
+
+`bugs triage-view` and `bugs risk-scan` still default to `--history-mode off`. Use `--history-mode full` only when the caller explicitly needs per-bug history details in those workflow results.
 
 `bugs history` and embedded `--history-mode full` records now include `modifier`, `release`, `iteration`, and `project` alongside the existing state timeline fields.
 

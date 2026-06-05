@@ -35,6 +35,7 @@ def normalize_bug(raw: dict, base_url: str) -> dict:
     bug_id = raw.get("Id") or raw.get("id")
     linked_features = raw.get("Feature", []) or raw.get("feature") or raw.get("featureIds", [])
     linked_stories = raw.get("UserStory", []) or raw.get("userStory") or raw.get("userStoryIds", [])
+    comments = raw.get("Comments") or raw.get("comments")
     data_gaps = []
     owner = _name(raw.get("Owner") or raw.get("owner"))
     if owner is None:
@@ -45,6 +46,8 @@ def normalize_bug(raw: dict, base_url: str) -> dict:
     return {
         "bug_id": bug_id,
         "name": raw.get("Name") or raw.get("name"),
+        "description": raw.get("Description") or raw.get("description"),
+        "comments": _extract_comment_descriptions(comments),
         "url": f"{base_url}/entity/{bug_id}" if bug_id else None,
         "entity_type": _name(raw.get("EntityType") or raw.get("entityType")) or "Bug",
         "project": _name(raw.get("Project") or raw.get("project")),
@@ -125,3 +128,24 @@ def _extract_names(value):
     if name is None:
         return []
     return [name]
+
+
+def _extract_comment_descriptions(value):
+    if isinstance(value, dict):
+        items = value.get("Items")
+        if items is None:
+            items = value.get("items")
+        return _extract_comment_descriptions(items)
+    if isinstance(value, list):
+        comments = []
+        for item in value:
+            if isinstance(item, dict):
+                text = item.get("Description") or item.get("description")
+                if text is not None:
+                    comments.append(str(text))
+            elif item is not None:
+                comments.append(str(item))
+        return comments
+    if value is None:
+        return []
+    return [str(value)]
