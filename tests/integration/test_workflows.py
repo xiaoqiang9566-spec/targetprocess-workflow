@@ -414,8 +414,73 @@ def test_build_dataset_workflow_uses_scope_and_dataset_select():
     assert result.workflow == "build-dataset"
     assert captured["entity"] == "Bug"
     assert 'Project.Name == "Suunto work"' in captured["filters"]["where"]
-    assert "ReopenCount" in captured["filters"]["select"]
+    assert "ReopenCount" not in captured["filters"]["select"]
     assert "Tags" in captured["filters"]["select"]
+
+
+def test_build_dataset_workflow_full_history_mode_adds_status_timestamps_and_recomputes_reopen_count():
+    gateway = MemoryGateway(
+        entities={
+            "Bug": [
+                {
+                    "Id": 201,
+                    "Name": "Reopened after testing",
+                    "EntityType": {"Name": "Bug"},
+                    "Severity": {"Name": "Normal"},
+                    "Priority": {"Name": "High"},
+                    "EntityState": {"Name": "Verified"},
+                    "Owner": {"FirstName": "QA", "LastName": "User"},
+                    "Project": {"Name": "Suunto work"},
+                    "Team": {"Name": "ESW China NG3 Driver"},
+                    "CreateDate": "2026-06-01T00:00:00+00:00",
+                    "ModifyDate": "2026-06-05T00:00:00+00:00",
+                    "LastStateChangeDate": "2026-06-05T00:00:00+00:00",
+                    "ReopenCount": 0,
+                    "Tags": [],
+                }
+            ]
+        },
+        history={
+            "201": [
+                {"Date": "2026-06-02T00:00:00+00:00", "Field": "EntityState", "OldValue": "New", "NewValue": "In Progress"},
+                {"Date": "2026-06-03T00:00:00+00:00", "Field": "EntityState", "OldValue": "In Progress", "NewValue": "In Testing"},
+                {"Date": "2026-06-04T00:00:00+00:00", "Field": "EntityState", "OldValue": "In Testing", "NewValue": "New"},
+                {"Date": "2026-06-05T00:00:00+00:00", "Field": "EntityState", "OldValue": "New", "NewValue": "Verified"},
+            ]
+        },
+    )
+    history_calls = []
+
+    def capture_bug_history(bug_id):
+        history_calls.append(str(bug_id))
+        return MemoryGateway.bug_history(gateway, bug_id)
+
+    gateway.bug_history = capture_bug_history
+    settings = Settings(
+        base_url="https://example.tpondemand.com",
+        auth=AuthSettings(mode="access_token", secret="token"),
+        workflow_rules=WorkflowRulesSettings(
+            status_groups={
+                "triage": ["New"],
+                "in_progress": ["In Progress"],
+                "ready_for_qa": ["In Testing"],
+                "closed": ["Verified"],
+            },
+            default_scope={"project": ["Suunto work"], "team": ["ESW China NG3 Driver"]},
+        ),
+    )
+    service = TargetprocessService(settings=settings, gateway=gateway)
+
+    result = service.run_workflow("build-dataset", entity="Bug", history_mode="full")
+
+    assert history_calls == ["201"]
+    assert result.metadata["history_mode"] == "full"
+    assert "entered_in_testing_at" in result.metadata["csv_fieldnames"]
+    assert result.records[0]["entered_new_at"] == "2026-06-01T00:00:00+00:00"
+    assert result.records[0]["entered_in_progress_at"] == "2026-06-02T00:00:00+00:00"
+    assert result.records[0]["entered_in_testing_at"] == "2026-06-03T00:00:00+00:00"
+    assert result.records[0]["entered_verified_at"] == "2026-06-05T00:00:00+00:00"
+    assert result.records[0]["reopen_count"] == 1
 
 
 def test_build_workbook_workflow_generates_expected_sheets_and_focus_tabs():

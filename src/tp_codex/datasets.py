@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import re
+from datetime import datetime, timedelta, timezone
 from typing import Iterable, List
 
 from tp_codex.settings import WorkflowRulesSettings
@@ -9,6 +10,8 @@ from tp_codex.settings import WorkflowRulesSettings
 BUG_DATASET_SELECT_FIELDS = [
     "Id",
     "Name",
+    "Description",
+    "Comments",
     "EntityType",
     "Project",
     "Team",
@@ -27,7 +30,6 @@ BUG_DATASET_SELECT_FIELDS = [
     "BugCategory",
     "Feature",
     "UserStory",
-    "ReopenCount",
     "Tags",
 ]
 
@@ -35,6 +37,8 @@ BUG_DATASET_SELECT_FIELDS = [
 BUG_DATASET_FIELDNAMES = [
     "bug_id",
     "name",
+    "description",
+    "comments",
     "project",
     "team",
     "owner",
@@ -93,6 +97,10 @@ def build_bug_dataset_records(
         updated_at = _parse_datetime(record.get("updated_at"))
         last_status_change_at = _parse_datetime(record.get("last_status_change_at"))
         tags = _extract_tags(record.get("raw", {}).get("Tags") or record.get("raw", {}).get("tags"))
+        if "history" in record:
+            status_timestamps, reopen_count = _derive_history_metrics(record)
+        else:
+            status_timestamps, reopen_count = {}, int(record.get("reopen_count", 0) or 0)
 
         age_days = _days_between(created_at, now)
         stale_days = _days_between(updated_at, now)
@@ -103,11 +111,12 @@ def build_bug_dataset_records(
             "customer feedback" in str(record.get("name") or "").lower()
         )
         is_high_risk = bool(record.get("risk_signals")) or str(record.get("severity") or "") in workflow_rules.high_risk_severities
-        is_reopened = int(record.get("reopen_count", 0) or 0) > 0
+        is_reopened = reopen_count > 0
 
         dataset_records.append(
             {
                 **record,
+                **status_timestamps,
                 "created_date": _date_label(created_at),
                 "updated_date": _date_label(updated_at),
                 "last_status_change_date": _date_label(last_status_change_at),
@@ -136,10 +145,23 @@ def build_bug_dataset_records(
                     is_reopened=is_reopened,
                 ),
                 "team_scope_label": "default_scope_team" if str(record.get("team") or "") in default_scope_teams else "unscoped_team",
+                "reopen_count": reopen_count,
             }
         )
 
     return dataset_records
+
+
+def build_bug_dataset_fieldnames(records: Iterable[dict]) -> List[str]:
+    dynamic_status_fields = sorted(
+        {
+            key
+            for record in records
+            for key in record.keys()
+            if key.startswith("entered_") and key.endswith("_at")
+        }
+    )
+    return [*BUG_DATASET_FIELDNAMES, *dynamic_status_fields]
 
 
 def _parse_datetime(value: object) -> datetime | None:
@@ -148,7 +170,18 @@ def _parse_datetime(value: object) -> datetime | None:
     if isinstance(value, datetime):
         parsed = value
     else:
-        parsed = datetime.fromisoformat(str(value))
+        text = str(value)
+        match = re.match(r"^/Date\((?P<ms>-?\d+)(?P<offset>[+-]\d{4})\)/$", text)
+        if match:
+            ms = int(match.group("ms"))
+            offset = match.group("offset")
+            sign = 1 if offset[0] == "+" else -1
+            hours = int(offset[1:3])
+            minutes = int(offset[3:5])
+            tz = timezone(sign * timedelta(hours=hours, minutes=minutes))
+            parsed = datetime.fromtimestamp(ms / 1000, tz=tz)
+        else:
+            parsed = datetime.fromisoformat(text)
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
@@ -258,3 +291,66 @@ def _extract_tags(value: object) -> list[str]:
             result.extend(_extract_tags(item))
         return result
     return [str(value)]
+
+
+def _derive_history_metrics(record: dict) -> tuple[dict[str, str], int]:
+    reopen_count = int(record.get("reopen_count", 0) or 0)
+    history = _ordered_state_history(record.get("history") or [])
+    current_status = str(record.get("status_raw") or "").strip()
+    created_at = _normalized_timestamp(record.get("created_at"))
+    current_status_at = _normalized_timestamp(
+        record.get("last_status_change_at") or record.get("updated_at") or record.get("created_at")
+    )
+
+    if not history:
+        if current_status and current_status_at:
+            return {_status_timestamp_field(current_status): created_at or current_status_at}, reopen_count
+        return {}, reopen_count
+
+    status_timestamps: dict[str, str] = {}
+    first_from = str(history[0].get("from") or "").strip()
+    if first_from and created_at:
+        status_timestamps[_status_timestamp_field(first_from)] = created_at
+
+    awaiting_reopen = False
+    for event in history:
+        state = str(event.get("to") or "").strip()
+        if not state:
+            continue
+        changed_at = _normalized_timestamp(event.get("changed_at"))
+        if changed_at:
+            status_timestamps.setdefault(_status_timestamp_field(state), changed_at)
+
+        lowered = state.lower()
+        if lowered == "in testing":
+            awaiting_reopen = True
+        elif awaiting_reopen and lowered in {"new", "in progress"}:
+            reopen_count += 1
+            awaiting_reopen = False
+
+    if current_status and current_status_at:
+        status_timestamps.setdefault(_status_timestamp_field(current_status), current_status_at)
+
+    return status_timestamps, reopen_count
+
+
+def _ordered_state_history(history: list[dict]) -> list[dict]:
+    indexed = []
+    for idx, event in enumerate(history):
+        if str(event.get("field") or "") != "EntityState":
+            continue
+        indexed.append((idx, _parse_datetime(event.get("changed_at")), event))
+    indexed.sort(key=lambda item: (item[1] is None, item[1] or datetime.max.replace(tzinfo=timezone.utc), item[0]))
+    return [event for _, _, event in indexed]
+
+
+def _normalized_timestamp(value: object) -> str | None:
+    parsed = _parse_datetime(value)
+    if parsed is None:
+        return str(value) if value not in (None, "") else None
+    return parsed.isoformat()
+
+
+def _status_timestamp_field(status: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", status.lower()).strip("_")
+    return f"entered_{slug}_at"

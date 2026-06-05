@@ -1,3 +1,4 @@
+import csv
 import io
 import json
 import sys
@@ -71,6 +72,14 @@ def test_build_parser_includes_reports_build_dataset_command():
     assert args.command == "reports"
     assert args.reports_command == "build-dataset"
     assert args.format == "csv"
+
+
+def test_build_parser_build_dataset_accepts_history_mode():
+    parser = build_parser()
+
+    args = parser.parse_args(["reports", "build-dataset", "--history-mode", "full"])
+
+    assert args.history_mode == "full"
 
 
 def test_build_parser_includes_reports_build_workbook_command():
@@ -524,6 +533,69 @@ def test_cli_build_dataset_outputs_csv_with_reporting_columns(capsys):
     assert "is_customer_feedback" in payload
     assert "quality_bucket" in payload
     assert "default_scope_team" in payload
+
+
+def test_cli_build_dataset_full_history_mode_outputs_status_timestamp_columns(capsys):
+    gateway = MemoryGateway(
+        entities={
+            "Bug": [
+                {
+                    "Id": 101,
+                    "Name": "Crash on launch",
+                    "EntityType": {"Name": "Bug"},
+                    "Severity": {"Name": "Critical"},
+                    "Priority": {"Name": "High"},
+                    "EntityState": {"Name": "Verified"},
+                    "Owner": {"FirstName": "QA", "LastName": "User"},
+                    "Project": {"Name": "Suunto work"},
+                    "Team": {"Name": "ESW China NG3 Driver"},
+                    "CreateDate": "2026-06-01T00:00:00+00:00",
+                    "ModifyDate": "2026-06-05T00:00:00+00:00",
+                    "LastStateChangeDate": "2026-06-05T00:00:00+00:00",
+                    "ReopenCount": 0,
+                    "Tags": [],
+                }
+            ]
+        },
+        history={
+            "101": [
+                {"Date": "2026-06-02T00:00:00+00:00", "Field": "EntityState", "OldValue": "New", "NewValue": "In Progress"},
+                {"Date": "2026-06-03T00:00:00+00:00", "Field": "EntityState", "OldValue": "In Progress", "NewValue": "In Testing"},
+                {"Date": "2026-06-04T00:00:00+00:00", "Field": "EntityState", "OldValue": "In Testing", "NewValue": "New"},
+                {"Date": "2026-06-05T00:00:00+00:00", "Field": "EntityState", "OldValue": "New", "NewValue": "Verified"},
+            ]
+        },
+    )
+    settings = Settings(
+        base_url="https://example.tpondemand.com",
+        auth=AuthSettings(mode="access_token", secret="token"),
+        workflow_rules=WorkflowRulesSettings(
+            status_groups={
+                "triage": ["New"],
+                "in_progress": ["In Progress"],
+                "ready_for_qa": ["In Testing"],
+                "closed": ["Verified"],
+            },
+            high_risk_severities=["Critical"],
+            stale_days=5,
+            default_scope={"team": ["ESW China NG3 Driver"]},
+        ),
+    )
+
+    exit_code = run_cli(
+        ["reports", "build-dataset", "--history-mode", "full", "--format", "csv"],
+        settings=settings,
+        gateway=gateway,
+    )
+
+    assert exit_code == 0
+    payload = capsys.readouterr().out
+    row = next(csv.DictReader(io.StringIO(payload)))
+    assert row["entered_new_at"] == "2026-06-01T00:00:00+00:00"
+    assert row["entered_in_progress_at"] == "2026-06-02T00:00:00+00:00"
+    assert row["entered_in_testing_at"] == "2026-06-03T00:00:00+00:00"
+    assert row["entered_verified_at"] == "2026-06-05T00:00:00+00:00"
+    assert row["reopen_count"] == "1"
 
 
 def test_cli_build_workbook_requires_output_for_xlsx(capsys):

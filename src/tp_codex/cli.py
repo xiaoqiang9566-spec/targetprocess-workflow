@@ -53,6 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
     build_dataset = reports_sub.add_parser("build-dataset", parents=[common])
     build_dataset.add_argument("--entity", default="Bug")
     build_dataset.add_argument("--limit", type=int)
+    build_dataset.add_argument("--history-mode", choices=["off", "full"], default="off")
     build_workbook = reports_sub.add_parser("build-workbook")
     build_workbook.add_argument("--entity", default="Bug")
     build_workbook.add_argument("--limit", type=int)
@@ -287,7 +288,12 @@ def run_cli(argv: list[str] | None = None, *, settings: Optional[Settings] = Non
                 history_mode=getattr(args, "history_mode", None),
             )
         elif args.command == "reports" and args.reports_command == "build-dataset":
-            result = service.run_workflow("build-dataset", entity=args.entity, limit=args.limit)
+            result = service.run_workflow(
+                "build-dataset",
+                entity=args.entity,
+                limit=args.limit,
+                history_mode=getattr(args, "history_mode", None),
+            )
         elif args.command == "reports" and args.reports_command == "build-workbook":
             result = service.run_workflow("build-workbook", entity=args.entity, limit=args.limit)
         elif args.command == "reports" and args.reports_command == "weekly-report":

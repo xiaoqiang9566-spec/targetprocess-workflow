@@ -25,6 +25,8 @@ def test_normalize_bug_maps_review_export_business_fields():
         {
             "Id": 101,
             "Name": "Crash on launch",
+            "Description": "<div>Crashes after tapping start</div>",
+            "Comments": {"Items": [{"Description": "Needs logs"}, {"Description": "Reproduced"}]},
             "Suuntoappversion": "2.0.1",
             "Suuntoappplatform": "Android",
             "Products": [{"Name": "Watch A"}, {"Name": "Watch B"}],
@@ -38,6 +40,8 @@ def test_normalize_bug_maps_review_export_business_fields():
 
     assert record["suunto_app_version"] == "2.0.1"
     assert record["suunto_app_platform"] == "Android"
+    assert record["description"] == "<div>Crashes after tapping start</div>"
+    assert record["comments"] == ["Needs logs", "Reproduced"]
     assert record["products"] == ["Watch A", "Watch B"]
     assert record["firmware_version"] == "FW-9.8.7"
     assert record["reproducibility"] == "Always"
@@ -58,6 +62,8 @@ def test_normalize_bug_supports_v2_lowercase_reference_fields():
             "severity": {"name": "Critical"},
             "entityState": {"name": "New"},
             "owner": {"firstName": "Xiumin", "lastName": "Lin"},
+            "description": "Live v2 description",
+            "comments": {"items": [{"description": "First comment"}]},
             "products": {"items": [{"name": "Suunto Race 3"}]},
             "firmwareversion": "2.55.26",
             "feature": [{"id": 123}],
@@ -75,6 +81,8 @@ def test_normalize_bug_supports_v2_lowercase_reference_fields():
     assert record["severity"] == "Critical"
     assert record["status_raw"] == "New"
     assert record["owner"] == "Xiumin Lin"
+    assert record["description"] == "Live v2 description"
+    assert record["comments"] == ["First comment"]
     assert record["products"] == ["Suunto Race 3"]
     assert record["firmware_version"] == "2.55.26"
     assert record["linked_feature_ids"] == [123]
