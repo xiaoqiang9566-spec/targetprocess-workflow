@@ -19,4 +19,6 @@
 - Workflow commands and foundation commands behave differently. `bugs intake`, `triage-view`, `regression-queue`, `risk-scan`, and `review-export` auto-apply `default_scope` and `default_select`; `entities list` does not.
 - Do not equate "all current bugs" with "only open bugs" unless the user says so. `review-export` does not filter by status, so "full bug" pulls include all statuses in the three-team default scope, and statuses not mapped in `config/workflow_rules.yaml` show up as `unmapped`.
 - If the output needs to be handed back to a user, prefer CSV export with `--output` over dumping giant JSON into the conversation. The JSON payload for full review export can be extremely large.
-- Keep `--history-mode off` by default for `triage-view`, `risk-scan`, and `review-export`. `--history-mode full` adds one history fetch per bug and is only appropriate when embedded history is explicitly required.
+- `bugs review-export` and direct `reports build-dataset` exports should show first-entered status timestamps by default. Their default implementation should batch-query `BugSimpleHistory` snapshots and derive those columns without exposing raw `history`.
+- Only use `--history-mode full` when the caller explicitly needs embedded per-bug history details, such as sample analysis or a direct request to keep the raw history payload.
+- Keep `--history-mode off` by default for `triage-view` and `risk-scan`. Their default mode should remain history-free unless the caller explicitly requests `full`.

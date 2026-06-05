@@ -481,6 +481,164 @@ def test_build_dataset_workflow_full_history_mode_adds_status_timestamps_and_rec
     assert result.records[0]["entered_in_testing_at"] == "2026-06-03T00:00:00+00:00"
     assert result.records[0]["entered_verified_at"] == "2026-06-05T00:00:00+00:00"
     assert result.records[0]["reopen_count"] == 1
+    assert result.records[0]["history"][0]["to"] == "In Progress"
+
+
+def test_build_dataset_workflow_default_adds_status_timestamps_without_embedded_history():
+    gateway = MemoryGateway(
+        entities={
+            "Bug": [
+                {
+                    "Id": 201,
+                    "Name": "Reopened after testing",
+                    "EntityType": {"Name": "Bug"},
+                    "Severity": {"Name": "Normal"},
+                    "Priority": {"Name": "High"},
+                    "EntityState": {"Name": "Verified"},
+                    "Owner": {"FirstName": "QA", "LastName": "User"},
+                    "Project": {"Name": "Suunto work"},
+                    "Team": {"Name": "ESW China NG3 Driver"},
+                    "CreateDate": "2026-06-01T00:00:00+00:00",
+                    "ModifyDate": "2026-06-05T00:00:00+00:00",
+                    "LastStateChangeDate": "2026-06-05T00:00:00+00:00",
+                    "ReopenCount": 0,
+                    "Tags": [],
+                }
+                ],
+                "BugSimpleHistory": [
+                    {"Date": "2026-06-01T00:00:00+00:00", "EntityState": {"Name": "New"}, "Bug": {"Id": 201}},
+                    {"Date": "2026-06-02T00:00:00+00:00", "EntityState": {"Name": "In Progress"}, "Bug": {"Id": 201}},
+                    {"Date": "2026-06-03T00:00:00+00:00", "EntityState": {"Name": "In Testing"}, "Bug": {"Id": 201}},
+                    {"Date": "2026-06-04T00:00:00+00:00", "EntityState": {"Name": "New"}, "Bug": {"Id": 201}},
+                    {"Date": "2026-06-05T00:00:00+00:00", "EntityState": {"Name": "Verified"}, "Bug": {"Id": 201}},
+                ],
+        },
+    )
+    list_calls = []
+
+    def capture_list_entities(entity, filters=None, limit=None):
+        list_calls.append(entity)
+        return MemoryGateway.list_entities(gateway, entity, filters, limit)
+
+    gateway.list_entities = capture_list_entities
+    gateway.bug_history = lambda bug_id: (_ for _ in ()).throw(AssertionError("default build-dataset should not call bug_history"))
+    settings = Settings(
+        base_url="https://example.tpondemand.com",
+        auth=AuthSettings(mode="access_token", secret="token"),
+        workflow_rules=WorkflowRulesSettings(
+            status_groups={
+                "triage": ["New"],
+                "in_progress": ["In Progress"],
+                "ready_for_qa": ["In Testing"],
+                "closed": ["Verified"],
+            },
+            default_scope={"project": ["Suunto work"], "team": ["ESW China NG3 Driver"]},
+        ),
+    )
+    service = TargetprocessService(settings=settings, gateway=gateway)
+
+    result = service.run_workflow("build-dataset", entity="Bug")
+
+    assert list_calls == ["Bug", "BugSimpleHistory"]
+    assert result.metadata["history_mode"] == "off"
+    assert result.records[0]["entered_new_at"] == "2026-06-01T00:00:00+00:00"
+    assert result.records[0]["entered_in_progress_at"] == "2026-06-02T00:00:00+00:00"
+    assert result.records[0]["entered_in_testing_at"] == "2026-06-03T00:00:00+00:00"
+    assert result.records[0]["entered_verified_at"] == "2026-06-05T00:00:00+00:00"
+    assert result.records[0]["reopen_count"] == 1
+    assert "history" not in result.records[0]
+
+
+def test_review_export_default_adds_status_timestamps_without_embedded_history():
+    gateway = MemoryGateway(
+        entities={
+            "Bug": [
+                {
+                    "Id": 301,
+                    "Name": "Ready for QA crash",
+                    "EntityType": {"Name": "Bug"},
+                    "Severity": {"Name": "High"},
+                    "EntityState": {"Name": "Ready for QA"},
+                    "Owner": {"FirstName": "QA", "LastName": "User"},
+                    "Project": {"Name": "Suunto work"},
+                    "Team": {"Name": "ESW UI Team"},
+                    "CreateDate": "2026-06-01T00:00:00+00:00",
+                    "ModifyDate": "2026-06-03T00:00:00+00:00",
+                    "Tags": [],
+                }
+                ],
+                "BugSimpleHistory": [
+                    {"Date": "2026-06-01T00:00:00+00:00", "EntityState": {"Name": "New"}, "Bug": {"Id": 301}},
+                    {"Date": "2026-06-02T00:00:00+00:00", "EntityState": {"Name": "Ready for QA"}, "Bug": {"Id": 301}},
+                ],
+            },
+        )
+    list_calls = []
+
+    def capture_list_entities(entity, filters=None, limit=None):
+        list_calls.append(entity)
+        return MemoryGateway.list_entities(gateway, entity, filters, limit)
+
+    gateway.list_entities = capture_list_entities
+    gateway.bug_history = lambda bug_id: (_ for _ in ()).throw(AssertionError("default review-export should not call bug_history"))
+    settings = Settings(
+        base_url="https://example.tpondemand.com",
+        auth=AuthSettings(mode="access_token", secret="token"),
+        workflow_rules=WorkflowRulesSettings(
+            status_groups={"ready_for_qa": ["Ready for QA"]},
+            default_scope={"project": ["Suunto work"], "team": ["ESW UI Team"]},
+        ),
+    )
+    service = TargetprocessService(settings=settings, gateway=gateway)
+
+    result = service.run_workflow("review-export", entity="Bug")
+
+    assert list_calls == ["Bug", "BugSimpleHistory"]
+    assert result.records[0]["entered_new_at"] == "2026-06-01T00:00:00+00:00"
+    assert result.records[0]["entered_ready_for_qa_at"] == "2026-06-02T00:00:00+00:00"
+    assert "history" not in result.records[0]
+
+
+def test_review_export_full_history_mode_keeps_history_and_status_timestamps():
+    gateway = MemoryGateway(
+        entities={
+            "Bug": [
+                {
+                    "Id": 301,
+                    "Name": "Ready for QA crash",
+                    "EntityType": {"Name": "Bug"},
+                    "Severity": {"Name": "High"},
+                    "EntityState": {"Name": "Ready for QA"},
+                    "Owner": {"FirstName": "QA", "LastName": "User"},
+                    "Project": {"Name": "Suunto work"},
+                    "Team": {"Name": "ESW UI Team"},
+                    "CreateDate": "2026-06-01T00:00:00+00:00",
+                    "ModifyDate": "2026-06-03T00:00:00+00:00",
+                    "Tags": [],
+                }
+            ]
+        },
+        history={
+            "301": [
+                {"Date": "2026-06-02T00:00:00+00:00", "Field": "EntityState", "OldValue": "New", "NewValue": "Ready for QA"},
+            ]
+        },
+    )
+    settings = Settings(
+        base_url="https://example.tpondemand.com",
+        auth=AuthSettings(mode="access_token", secret="token"),
+        workflow_rules=WorkflowRulesSettings(
+            status_groups={"ready_for_qa": ["Ready for QA"]},
+            default_scope={"project": ["Suunto work"], "team": ["ESW UI Team"]},
+        ),
+    )
+    service = TargetprocessService(settings=settings, gateway=gateway)
+
+    result = service.run_workflow("review-export", entity="Bug", history_mode="full")
+
+    assert result.records[0]["entered_new_at"] == "2026-06-01T00:00:00+00:00"
+    assert result.records[0]["entered_ready_for_qa_at"] == "2026-06-02T00:00:00+00:00"
+    assert result.records[0]["history"][0]["to"] == "Ready for QA"
 
 
 def test_build_workbook_workflow_generates_expected_sheets_and_focus_tabs():

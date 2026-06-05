@@ -83,6 +83,25 @@ BUG_DATASET_FIELDNAMES = [
 ]
 
 
+REVIEW_EXPORT_FIELDNAMES = [
+    "bug_id",
+    "name",
+    "status_raw",
+    "status_group",
+    "severity",
+    "owner",
+    "updated_at",
+    "team",
+    "suunto_app_version",
+    "suunto_app_platform",
+    "products",
+    "firmware_version",
+    "reproducibility",
+    "bug_category",
+    "linked_feature_ids",
+]
+
+
 def build_bug_dataset_records(
     records: Iterable[dict],
     workflow_rules: WorkflowRulesSettings,
@@ -153,6 +172,14 @@ def build_bug_dataset_records(
 
 
 def build_bug_dataset_fieldnames(records: Iterable[dict]) -> List[str]:
+    return build_status_timestamp_fieldnames(records, BUG_DATASET_FIELDNAMES)
+
+
+def build_review_export_fieldnames(records: Iterable[dict]) -> List[str]:
+    return build_status_timestamp_fieldnames(records, REVIEW_EXPORT_FIELDNAMES)
+
+
+def build_status_timestamp_fieldnames(records: Iterable[dict], base_fieldnames: Iterable[str]) -> List[str]:
     dynamic_status_fields = sorted(
         {
             key
@@ -161,7 +188,25 @@ def build_bug_dataset_fieldnames(records: Iterable[dict]) -> List[str]:
             if key.startswith("entered_") and key.endswith("_at")
         }
     )
-    return [*BUG_DATASET_FIELDNAMES, *dynamic_status_fields]
+    return [*base_fieldnames, *dynamic_status_fields]
+
+
+def summarize_bug_history(
+    record: dict,
+    history: list[dict],
+    *,
+    include_history: bool = False,
+    recompute_reopen_count: bool = False,
+) -> dict:
+    status_timestamps, derived_reopen_count = _derive_history_metrics({**record, "history": history})
+    summarized = {
+        **record,
+        **status_timestamps,
+        "reopen_count": derived_reopen_count if recompute_reopen_count else int(record.get("reopen_count", 0) or 0),
+    }
+    if include_history:
+        summarized["history"] = history
+    return summarized
 
 
 def _parse_datetime(value: object) -> datetime | None:
@@ -294,7 +339,8 @@ def _extract_tags(value: object) -> list[str]:
 
 
 def _derive_history_metrics(record: dict) -> tuple[dict[str, str], int]:
-    reopen_count = int(record.get("reopen_count", 0) or 0)
+    fallback_reopen_count = int(record.get("reopen_count", 0) or 0)
+    reopen_count = 0
     history = _ordered_state_history(record.get("history") or [])
     current_status = str(record.get("status_raw") or "").strip()
     created_at = _normalized_timestamp(record.get("created_at"))
@@ -304,13 +350,16 @@ def _derive_history_metrics(record: dict) -> tuple[dict[str, str], int]:
 
     if not history:
         if current_status and current_status_at:
-            return {_status_timestamp_field(current_status): created_at or current_status_at}, reopen_count
-        return {}, reopen_count
+            return {_status_timestamp_field(current_status): created_at or current_status_at}, fallback_reopen_count
+        return {}, fallback_reopen_count
 
     status_timestamps: dict[str, str] = {}
     first_from = str(history[0].get("from") or "").strip()
     if first_from and created_at:
         status_timestamps[_status_timestamp_field(first_from)] = created_at
+    first_to = str(history[0].get("to") or "").strip()
+    if not first_from and first_to and created_at:
+        status_timestamps.setdefault(_status_timestamp_field(first_to), created_at)
 
     awaiting_reopen = False
     for event in history:
