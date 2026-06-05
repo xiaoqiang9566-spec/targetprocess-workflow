@@ -47,6 +47,10 @@ MONTHLY_AUDIT_HISTORY_FIELDNAMES = [
     "field",
     "from",
     "to",
+    "modifier",
+    "release",
+    "iteration",
+    "project",
 ]
 
 MONTHLY_REASON_LABELS = {
@@ -321,12 +325,16 @@ def _candidate_history_sheet(candidates: Sequence[dict]) -> WorkbookSheet:
                         event.get("field"),
                         event.get("from"),
                         event.get("to"),
+                        event.get("modifier"),
+                        event.get("release"),
+                        event.get("iteration"),
+                        event.get("project"),
                     ]
                 )
             )
             has_rows = True
     if not has_rows:
-        rows.append(WorkbookRow(["none", "", "", "", "", "", ""]))
+        rows.append(WorkbookRow(["none", "", "", "", "", "", "", "", "", "", ""]))
     return WorkbookSheet(name="Candidate_History", rows=rows)
 
 

@@ -1,4 +1,4 @@
-from tp_codex.normalizers import normalize_bug
+from tp_codex.normalizers import normalize_bug, normalize_history
 
 
 def test_normalize_bug_supports_aliased_team_and_state_fields():
@@ -82,3 +82,35 @@ def test_normalize_bug_supports_v2_lowercase_reference_fields():
     assert record["reproducibility"] == "Always"
     assert record["suunto_app_version"] == "2.55.26"
     assert record["suunto_app_platform"] == "Watch"
+
+
+def test_normalize_history_supports_bug_simple_history_shape():
+    events = normalize_history(
+        [
+            {
+                "ResourceType": "BugSimpleHistory",
+                "Id": 1477683,
+                "Date": "/Date(1780657412097+0200)/",
+                "EntityState": {"Name": "New"},
+                "Modifier": {"FullName": "Lena Bergendahl"},
+                "Project": {"Name": "Suunto work"},
+                "Release": {"Name": "NG3 Release 1"},
+                "Iteration": {"Name": "Sprint 24"},
+                "Bug": {"Id": 211617, "Name": "Nautic update available banner placement"},
+            }
+        ]
+    )
+
+    assert events == [
+        {
+            "event_type": "state_snapshot",
+            "changed_at": "/Date(1780657412097+0200)/",
+            "field": "EntityState",
+            "from": None,
+            "to": "New",
+            "modifier": "Lena Bergendahl",
+            "release": "NG3 Release 1",
+            "iteration": "Sprint 24",
+            "project": "Suunto work",
+        }
+    ]

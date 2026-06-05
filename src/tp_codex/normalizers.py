@@ -9,6 +9,8 @@ def _name(value):
             return value["Name"]
         if "name" in value:
             return value["name"]
+        if "FullName" in value:
+            return value["FullName"]
         first = value.get("FirstName")
         last = value.get("LastName")
         if not (first or last):
@@ -73,13 +75,20 @@ def normalize_bug(raw: dict, base_url: str) -> dict:
 def normalize_history(events: list[dict]) -> list[dict]:
     normalized = []
     for event in events:
+        entity_state = _name(event.get("EntityState") or event.get("entityState"))
         normalized.append(
             {
-                "event_type": event.get("EventType") or event.get("eventType") or "unknown",
+                "event_type": event.get("EventType")
+                or event.get("eventType")
+                or ("state_snapshot" if entity_state else "unknown"),
                 "changed_at": _iso(event.get("Date") or event.get("changedAt")),
-                "field": event.get("Field") or event.get("field"),
+                "field": event.get("Field") or event.get("field") or ("EntityState" if entity_state else None),
                 "from": event.get("OldValue") or event.get("from"),
-                "to": event.get("NewValue") or event.get("to"),
+                "to": event.get("NewValue") or event.get("to") or entity_state,
+                "modifier": _name(event.get("Modifier") or event.get("modifier")),
+                "release": _name(event.get("Release") or event.get("release")),
+                "iteration": _name(event.get("Iteration") or event.get("iteration")),
+                "project": _name(event.get("Project") or event.get("project")),
             }
         )
     return normalized

@@ -160,6 +160,24 @@
 - “没有报错”不等于“数据完整”。
 - 部分结果要诚实暴露，不能伪装成完整结果。
 
+### 7.1 Comment 有独立只读入口，但当前 CLI 还没有一等封装
+
+已验证事实：
+
+- 当前实例存在独立 `Comment` 实体，schema 位于 `api/v1/Comments/meta`。
+- 直接只读 GET `api/v1/Comments?take=1` 可以返回真实 comment 记录，包括 `Description`、`General`、`Owner`、`CreateDate`、`DescriptionModifyDate`。
+- `entities list --entity Comment` 虽然能命中实体，但当前实现仍按 bug 结构做标准化，因此输出不可直接当 comment reader 使用。
+
+正确执行方式：
+
+- 需要确认 comment 能否单独读取时，优先用 `schema snapshot --entity Comment` 和受控只读 GET 验证，不要假设 comment 只能从 bug history 或页面抓取。
+- 在当前仓库里，如果要产品化 comment 读取，应新增 comment 专用 normalizer 和只读命令，不要复用 bug normalizer。
+
+经验教训：
+
+- “上游 API 有入口”和“当前 CLI 已经正确暴露入口”是两件事。
+- 探查只读能力时，要同时验证 schema、真实 GET 和本地封装层的输出形状。
+
 ### 8. Live 验证必须显式 opt-in
 
 曾导致问题的做法：

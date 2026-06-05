@@ -180,6 +180,10 @@ def test_triage_view_full_history_mode_keeps_records_when_one_history_request_ti
             "field": None,
             "from": None,
             "to": None,
+            "modifier": None,
+            "release": None,
+            "iteration": None,
+            "project": None,
         }
     ]
     assert result.records[1]["history"] == []
@@ -664,8 +668,30 @@ def test_monthly_audit_workflow_builds_summary_and_candidates():
             ]
         },
         history={
-            "201": [{"Date": "2026-06-21T00:00:00+00:00", "Field": "EntityState", "OldValue": "New", "NewValue": "Fixed"}],
-            "202": [{"Date": "2026-06-18T00:00:00+00:00", "Field": "EntityState", "OldValue": "In Progress", "NewValue": "Expired"}],
+            "201": [
+                {
+                    "Date": "2026-06-21T00:00:00+00:00",
+                    "Field": "EntityState",
+                    "OldValue": "New",
+                    "NewValue": "Fixed",
+                    "Modifier": {"FullName": "QA User"},
+                    "Project": {"Name": "Suunto work"},
+                    "Release": {"Name": "NG3 Release"},
+                    "Iteration": {"Name": "Sprint 25"},
+                }
+            ],
+            "202": [
+                {
+                    "Date": "2026-06-18T00:00:00+00:00",
+                    "Field": "EntityState",
+                    "OldValue": "In Progress",
+                    "NewValue": "Expired",
+                    "Modifier": {"FullName": "Dev User"},
+                    "Project": {"Name": "Suunto work"},
+                    "Release": {"Name": "NG3 Release"},
+                    "Iteration": {"Name": "Sprint 24"},
+                }
+            ],
         },
     )
     history_calls = []
@@ -742,8 +768,30 @@ def test_monthly_audit_workflow_generates_expected_workbook_sheets():
             ]
         },
         history={
-            "201": [{"Date": "2026-06-21T00:00:00+00:00", "Field": "EntityState", "OldValue": "New", "NewValue": "Fixed"}],
-            "202": [{"Date": "2026-06-18T00:00:00+00:00", "Field": "EntityState", "OldValue": "In Progress", "NewValue": "Expired"}],
+            "201": [
+                {
+                    "Date": "2026-06-21T00:00:00+00:00",
+                    "Field": "EntityState",
+                    "OldValue": "New",
+                    "NewValue": "Fixed",
+                    "Modifier": {"FullName": "QA User"},
+                    "Project": {"Name": "Suunto work"},
+                    "Release": {"Name": "NG3 Release"},
+                    "Iteration": {"Name": "Sprint 25"},
+                }
+            ],
+            "202": [
+                {
+                    "Date": "2026-06-18T00:00:00+00:00",
+                    "Field": "EntityState",
+                    "OldValue": "In Progress",
+                    "NewValue": "Expired",
+                    "Modifier": {"FullName": "Dev User"},
+                    "Project": {"Name": "Suunto work"},
+                    "Release": {"Name": "NG3 Release"},
+                    "Iteration": {"Name": "Sprint 24"},
+                }
+            ],
         },
     )
     settings = Settings(
@@ -780,8 +828,23 @@ def test_monthly_audit_workflow_generates_expected_workbook_sheets():
     assert any("201" in row for row in candidate_rows)
     assert any("202" in row for row in candidate_rows)
     history_rows = _sheet_rows(workbook_bytes, "Candidate_History")
+    assert history_rows[1] == [
+        "bug_id",
+        "name",
+        "event_type",
+        "changed_at",
+        "field",
+        "from",
+        "to",
+        "modifier",
+        "release",
+        "iteration",
+        "project",
+    ]
     assert any("Fixed" in row for row in history_rows)
     assert any("Expired" in row for row in history_rows)
+    assert any("QA User" in row for row in history_rows)
+    assert any("Sprint 25" in row for row in history_rows)
 
 
 def _sheet_names(workbook_bytes: bytes) -> list[str]:

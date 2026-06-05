@@ -397,6 +397,10 @@ def test_cli_triage_view_full_history_mode_includes_history(capsys):
                     "Date": "2026-06-03T00:00:00+00:00",
                     "Action": "Update",
                     "Description": "Severity changed",
+                    "Modifier": {"FullName": "QA User"},
+                    "Project": {"Name": "QA"},
+                    "Release": {"Name": "Release 24.6"},
+                    "Iteration": {"Name": "Sprint 23"},
                 }
             ]
         },
@@ -423,6 +427,10 @@ def test_cli_triage_view_full_history_mode_includes_history(capsys):
             "field": None,
             "from": None,
             "to": None,
+            "modifier": "QA User",
+            "release": "Release 24.6",
+            "iteration": "Sprint 23",
+            "project": "QA",
         }
     ]
 

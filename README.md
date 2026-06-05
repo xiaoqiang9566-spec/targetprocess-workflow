@@ -7,6 +7,7 @@ Read-only Targetprocess automation toolkit for QA-oriented bug workflows.
 - Read-only connectivity and auth selection
 - Schema snapshot export for `Bug`, `Feature`, and `UserStory`
 - Entity listing and Bug history retrieval
+- Live exploration confirms a separate read-only `Comment` entity at `api/v1/Comments`
 - QA workflow commands for intake, triage view, regression queue, risk scan, and review export
 - Reporting workflows for dataset export, quality workbook, weekly report, monthly audit, and run bundles
 - JSON, Markdown, CSV, and XLSX output
@@ -58,6 +59,14 @@ python scripts/tp_history_mode_benchmark.py --limit 5
 `bugs intake`, `bugs triage-view`, `bugs regression-queue`, `bugs risk-scan`, and `bugs review-export` automatically apply the defaults from `config/workflow_rules.yaml`.
 
 `bugs triage-view`, `bugs risk-scan`, and `bugs review-export` default to `--history-mode off`. Use `--history-mode full` when the caller explicitly needs per-bug history in those workflow results.
+
+`bugs history` and embedded `--history-mode full` records now include `modifier`, `release`, `iteration`, and `project` alongside the existing state timeline fields.
+
+Live discovery note:
+
+- Targetprocess exposes a separate read-only `Comment` entity at `https://suunto.tpondemand.com/api/v1/Comments`.
+- The current generic `entities list --entity Comment` path is not a usable comment reader because the toolkit still normalizes entity-list records as bug-shaped data.
+- If comment retrieval needs to become a first-class workflow, add a dedicated comment normalizer plus a v1-backed read-only command instead of reusing bug normalization.
 
 Current defaults:
 

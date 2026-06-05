@@ -98,6 +98,10 @@ def test_live_bug_history_returns_records(capsys):
         assert "field" in first
         assert "from" in first
         assert "to" in first
+        assert "modifier" in first
+        assert "release" in first
+        assert "iteration" in first
+        assert "project" in first
 
 
 @pytest.mark.live
@@ -164,3 +168,9 @@ def test_live_triage_view_full_history_mode_returns_history_when_records_exist(c
     for record in payload["records"]:
         assert "history" in record
         assert isinstance(record["history"], list)
+        if record["history"]:
+            first = record["history"][0]
+            assert "modifier" in first
+            assert "release" in first
+            assert "iteration" in first
+            assert "project" in first
