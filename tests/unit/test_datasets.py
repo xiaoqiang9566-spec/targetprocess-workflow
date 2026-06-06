@@ -47,6 +47,9 @@ def test_build_bug_dataset_records_derives_reporting_fields():
     assert BUG_DATASET_FIELDNAMES[0] == "bug_id"
     assert "description" in BUG_DATASET_FIELDNAMES
     assert "comments" in BUG_DATASET_FIELDNAMES
+    assert record["created_at"] == "2026-05-26 00:00:00"
+    assert record["updated_at"] == "2026-06-03 00:00:00"
+    assert record["last_status_change_at"] == "2026-06-02 00:00:00"
     assert record["created_week"] == "2026-W22"
     assert record["updated_month"] == "2026-06"
     assert record["age_days"] == 10
@@ -106,9 +109,12 @@ def test_build_bug_dataset_records_derives_status_timestamps_and_reopen_count_fr
     dataset = build_bug_dataset_records(records, workflow_rules=rules, now=datetime(2026, 6, 6, tzinfo=timezone.utc))
 
     record = dataset[0]
-    assert record["entered_new_at"] == "2026-06-01T00:00:00+00:00"
-    assert record["entered_in_progress_at"] == "2026-06-02T00:00:00+00:00"
-    assert record["entered_in_testing_at"] == "2026-06-03T00:00:00+00:00"
-    assert record["entered_verified_at"] == "2026-06-05T00:00:00+00:00"
+    assert record["created_at"] == "2026-06-01 00:00:00"
+    assert record["updated_at"] == "2026-06-05 00:00:00"
+    assert record["last_status_change_at"] == "2026-06-05 00:00:00"
+    assert record["entered_new_at"] == "2026-06-01"
+    assert record["entered_in_progress_at"] == "2026-06-02"
+    assert record["entered_in_testing_at"] == "2026-06-03"
+    assert record["entered_verified_at"] == "2026-06-05"
     assert record["reopen_count"] == 1
     assert record["is_reopened"] is True

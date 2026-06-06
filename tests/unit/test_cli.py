@@ -543,8 +543,11 @@ def test_cli_review_export_outputs_expanded_csv(capsys):
     payload = capsys.readouterr().out
     rows = list(csv.DictReader(io.StringIO(payload)))
     assert list(rows[0].keys())[: len(BUG_DATASET_FIELDNAMES)] == BUG_DATASET_FIELDNAMES
-    assert rows[0]["entered_new_at"] == "2026-06-01T00:00:00+00:00"
-    assert rows[0]["entered_ready_for_qa_at"] == "2026-06-02T00:00:00+00:00"
+    assert rows[0]["created_at"] == "2026-06-01 00:00:00"
+    assert rows[0]["updated_at"] == "2026-06-03 00:00:00"
+    assert rows[0]["last_status_change_at"] == "2026-06-02 00:00:00"
+    assert rows[0]["entered_new_at"] == "2026-06-01"
+    assert rows[0]["entered_ready_for_qa_at"] == "2026-06-02"
     assert rows[0]["project"] == "Suunto work"
     assert rows[0]["priority"] == "High"
     assert rows[0]["status_group"] == "triage"
@@ -606,8 +609,11 @@ def test_cli_review_export_default_json_omits_history_but_includes_status_timest
     payload = json.loads(capsys.readouterr().out)
     record = payload["records"][0]
     assert "history" not in record
-    assert record["entered_new_at"] == "2026-06-01T00:00:00+00:00"
-    assert record["entered_ready_for_qa_at"] == "2026-06-02T00:00:00+00:00"
+    assert record["created_at"] == "2026-06-01 00:00:00"
+    assert record["updated_at"] == "2026-06-03 00:00:00"
+    assert record["last_status_change_at"] == "2026-06-03 00:00:00"
+    assert record["entered_new_at"] == "2026-06-01"
+    assert record["entered_ready_for_qa_at"] == "2026-06-02"
 
 
 def test_cli_review_export_passes_where_filter(capsys):
@@ -683,8 +689,11 @@ def test_cli_review_export_full_history_mode_keeps_history_and_status_timestamps
     assert exit_code == 0
     payload = json.loads(capsys.readouterr().out)
     record = payload["records"][0]
-    assert record["entered_new_at"] == "2026-06-01T00:00:00+00:00"
-    assert record["entered_ready_for_qa_at"] == "2026-06-02T00:00:00+00:00"
+    assert record["created_at"] == "2026-06-01 00:00:00"
+    assert record["updated_at"] == "2026-06-03 00:00:00"
+    assert record["last_status_change_at"] == "2026-06-03 00:00:00"
+    assert record["entered_new_at"] == "2026-06-01"
+    assert record["entered_ready_for_qa_at"] == "2026-06-02"
     assert record["history"] == [
         {
             "event_type": "unknown",
@@ -754,9 +763,12 @@ def test_cli_build_dataset_outputs_csv_with_reporting_columns(capsys):
     assert row["is_customer_feedback"] == "True"
     assert row["quality_bucket"] == "customer_feedback"
     assert row["team_scope_label"] == "default_scope_team"
-    assert row["entered_new_at"] == "2026-05-26T00:00:00+00:00"
-    assert row["entered_in_progress_at"] == "2026-05-28T00:00:00+00:00"
-    assert row["entered_in_testing_at"] == "2026-05-29T00:00:00+00:00"
+    assert row["created_at"] == "2026-05-26 00:00:00"
+    assert row["updated_at"] == "2026-06-03 00:00:00"
+    assert row["last_status_change_at"] == "2026-06-02 00:00:00"
+    assert row["entered_new_at"] == "2026-05-26"
+    assert row["entered_in_progress_at"] == "2026-05-28"
+    assert row["entered_in_testing_at"] == "2026-05-29"
     assert row["reopen_count"] == "1"
 
 
@@ -858,10 +870,13 @@ def test_cli_build_dataset_full_history_mode_keeps_history_and_outputs_status_ti
     assert exit_code == 0
     payload = json.loads(capsys.readouterr().out)
     record = payload["records"][0]
-    assert record["entered_new_at"] == "2026-06-01T00:00:00+00:00"
-    assert record["entered_in_progress_at"] == "2026-06-02T00:00:00+00:00"
-    assert record["entered_in_testing_at"] == "2026-06-03T00:00:00+00:00"
-    assert record["entered_verified_at"] == "2026-06-05T00:00:00+00:00"
+    assert record["created_at"] == "2026-06-01 00:00:00"
+    assert record["updated_at"] == "2026-06-05 00:00:00"
+    assert record["last_status_change_at"] == "2026-06-05 00:00:00"
+    assert record["entered_new_at"] == "2026-06-01"
+    assert record["entered_in_progress_at"] == "2026-06-02"
+    assert record["entered_in_testing_at"] == "2026-06-03"
+    assert record["entered_verified_at"] == "2026-06-05"
     assert record["reopen_count"] == 1
     assert record["history"] == [
         {
@@ -1490,7 +1505,10 @@ def test_cli_review_export_writes_csv_to_output_file(tmp_path, capsys):
     rows = list(csv.DictReader(io.StringIO(payload)))
 
     assert list(rows[0].keys())[: len(BUG_DATASET_FIELDNAMES)] == BUG_DATASET_FIELDNAMES
-    assert rows[0]["entered_new_at"] == "2026-06-01T00:00:00+00:00"
+    assert rows[0]["created_at"] == "2026-06-01 00:00:00"
+    assert rows[0]["updated_at"] == "2026-06-03 00:00:00"
+    assert rows[0]["last_status_change_at"] == "2026-06-02 00:00:00"
+    assert rows[0]["entered_new_at"] == "2026-06-01"
     assert rows[0]["quality_bucket"] == "customer_feedback"
     assert rows[0]["linked_user_story_ids"] == "601"
 

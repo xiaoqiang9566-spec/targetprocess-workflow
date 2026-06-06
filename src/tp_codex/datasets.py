@@ -135,6 +135,9 @@ def build_bug_dataset_records(
         dataset_records.append(
             {
                 **record,
+                "created_at": _datetime_label(created_at),
+                "updated_at": _datetime_label(updated_at),
+                "last_status_change_at": _datetime_label(last_status_change_at),
                 **status_timestamps,
                 "created_date": _date_label(created_at),
                 "updated_date": _date_label(updated_at),
@@ -177,6 +180,16 @@ def build_bug_dataset_fieldnames(records: Iterable[dict]) -> List[str]:
 
 def build_review_export_fieldnames(records: Iterable[dict]) -> List[str]:
     return build_status_timestamp_fieldnames(records, REVIEW_EXPORT_FIELDNAMES)
+
+
+def format_bug_report_timestamps(record: dict) -> dict:
+    formatted = dict(record)
+    for field in ("created_at", "updated_at", "last_status_change_at"):
+        formatted[field] = _formatted_timestamp_value(record.get(field), include_time=True)
+    for key in list(formatted.keys()):
+        if key.startswith("entered_") and key.endswith("_at"):
+            formatted[key] = _formatted_timestamp_value(record.get(key), include_time=False)
+    return formatted
 
 
 def build_status_timestamp_fieldnames(records: Iterable[dict], base_fieldnames: Iterable[str]) -> List[str]:
@@ -394,10 +407,20 @@ def _ordered_state_history(history: list[dict]) -> list[dict]:
 
 
 def _normalized_timestamp(value: object) -> str | None:
+    return _formatted_timestamp_value(value, include_time=False)
+
+
+def _datetime_label(value: datetime | None) -> str | None:
+    return value.strftime("%Y-%m-%d %H:%M:%S") if value else None
+
+
+def _formatted_timestamp_value(value: object, *, include_time: bool) -> str | None:
     parsed = _parse_datetime(value)
     if parsed is None:
         return str(value) if value not in (None, "") else None
-    return parsed.isoformat()
+    if include_time:
+        return _datetime_label(parsed)
+    return _date_label(parsed)
 
 
 def _status_timestamp_field(status: str) -> str:

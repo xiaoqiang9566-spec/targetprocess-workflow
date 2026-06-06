@@ -534,10 +534,13 @@ def test_build_dataset_workflow_full_history_mode_adds_status_timestamps_and_rec
     assert history_calls == ["201"]
     assert result.metadata["history_mode"] == "full"
     assert "entered_in_testing_at" in result.metadata["csv_fieldnames"]
-    assert result.records[0]["entered_new_at"] == "2026-06-01T00:00:00+00:00"
-    assert result.records[0]["entered_in_progress_at"] == "2026-06-02T00:00:00+00:00"
-    assert result.records[0]["entered_in_testing_at"] == "2026-06-03T00:00:00+00:00"
-    assert result.records[0]["entered_verified_at"] == "2026-06-05T00:00:00+00:00"
+    assert result.records[0]["created_at"] == "2026-06-01 00:00:00"
+    assert result.records[0]["updated_at"] == "2026-06-05 00:00:00"
+    assert result.records[0]["last_status_change_at"] == "2026-06-05 00:00:00"
+    assert result.records[0]["entered_new_at"] == "2026-06-01"
+    assert result.records[0]["entered_in_progress_at"] == "2026-06-02"
+    assert result.records[0]["entered_in_testing_at"] == "2026-06-03"
+    assert result.records[0]["entered_verified_at"] == "2026-06-05"
     assert result.records[0]["reopen_count"] == 1
     assert result.records[0]["history"][0]["to"] == "In Progress"
 
@@ -599,10 +602,13 @@ def test_build_dataset_workflow_default_adds_status_timestamps_without_embedded_
 
     assert list_calls == ["Bug", "BugSimpleHistory"]
     assert result.metadata["history_mode"] == "off"
-    assert result.records[0]["entered_new_at"] == "2026-06-01T00:00:00+00:00"
-    assert result.records[0]["entered_in_progress_at"] == "2026-06-02T00:00:00+00:00"
-    assert result.records[0]["entered_in_testing_at"] == "2026-06-03T00:00:00+00:00"
-    assert result.records[0]["entered_verified_at"] == "2026-06-05T00:00:00+00:00"
+    assert result.records[0]["created_at"] == "2026-06-01 00:00:00"
+    assert result.records[0]["updated_at"] == "2026-06-05 00:00:00"
+    assert result.records[0]["last_status_change_at"] == "2026-06-05 00:00:00"
+    assert result.records[0]["entered_new_at"] == "2026-06-01"
+    assert result.records[0]["entered_in_progress_at"] == "2026-06-02"
+    assert result.records[0]["entered_in_testing_at"] == "2026-06-03"
+    assert result.records[0]["entered_verified_at"] == "2026-06-05"
     assert result.records[0]["reopen_count"] == 1
     assert "history" not in result.records[0]
 
@@ -652,8 +658,11 @@ def test_review_export_default_adds_status_timestamps_without_embedded_history()
     result = service.run_workflow("review-export", entity="Bug")
 
     assert list_calls == ["Bug", "BugSimpleHistory"]
-    assert result.records[0]["entered_new_at"] == "2026-06-01T00:00:00+00:00"
-    assert result.records[0]["entered_ready_for_qa_at"] == "2026-06-02T00:00:00+00:00"
+    assert result.records[0]["created_at"] == "2026-06-01 00:00:00"
+    assert result.records[0]["updated_at"] == "2026-06-03 00:00:00"
+    assert result.records[0]["last_status_change_at"] == "2026-06-03 00:00:00"
+    assert result.records[0]["entered_new_at"] == "2026-06-01"
+    assert result.records[0]["entered_ready_for_qa_at"] == "2026-06-02"
     assert "history" not in result.records[0]
 
 
@@ -694,8 +703,11 @@ def test_review_export_full_history_mode_keeps_history_and_status_timestamps():
 
     result = service.run_workflow("review-export", entity="Bug", history_mode="full")
 
-    assert result.records[0]["entered_new_at"] == "2026-06-01T00:00:00+00:00"
-    assert result.records[0]["entered_ready_for_qa_at"] == "2026-06-02T00:00:00+00:00"
+    assert result.records[0]["created_at"] == "2026-06-01 00:00:00"
+    assert result.records[0]["updated_at"] == "2026-06-03 00:00:00"
+    assert result.records[0]["last_status_change_at"] == "2026-06-03 00:00:00"
+    assert result.records[0]["entered_new_at"] == "2026-06-01"
+    assert result.records[0]["entered_ready_for_qa_at"] == "2026-06-02"
     assert result.records[0]["history"][0]["to"] == "Ready for QA"
 
 

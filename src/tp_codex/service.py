@@ -10,6 +10,7 @@ from tp_codex.datasets import (
     build_bug_dataset_fieldnames,
     build_bug_dataset_records,
     build_review_export_fieldnames,
+    format_bug_report_timestamps,
     summarize_bug_history,
 )
 from tp_codex.errors import UpstreamOrTimeoutError
@@ -155,6 +156,8 @@ class TargetprocessService:
             records, partial = self._summarize_records_with_bug_simple_history(records, recompute_reopen_count=False)
             if partial:
                 warnings.append("partial_history")
+        if workflow == "review-export":
+            records = [format_bug_report_timestamps(record) for record in records]
         result = self._result(workflow, entity, filters, records, warnings, query.total_count)
         if workflow == "review-export":
             result.metadata["csv_fieldnames"] = build_review_export_fieldnames(records)
