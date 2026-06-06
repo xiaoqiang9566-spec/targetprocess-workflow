@@ -54,6 +54,7 @@ def build_parser() -> argparse.ArgumentParser:
     build_dataset.add_argument("--entity", default="Bug")
     build_dataset.add_argument("--limit", type=int)
     build_dataset.add_argument("--history-mode", choices=["off", "full"], default="off")
+    build_dataset.add_argument("--where")
     build_workbook = reports_sub.add_parser("build-workbook")
     build_workbook.add_argument("--entity", default="Bug")
     build_workbook.add_argument("--limit", type=int)
@@ -96,6 +97,8 @@ def build_parser() -> argparse.ArgumentParser:
         cmd.add_argument("--limit", type=int)
         if name in {"triage-view", "risk-scan", "review-export"}:
             cmd.add_argument("--history-mode", choices=["off", "full"], default="off")
+        if name == "review-export":
+            cmd.add_argument("--where")
     history = bugs_sub.add_parser("history", parents=[common])
     history.add_argument("--bug-id", required=True)
 
@@ -281,16 +284,20 @@ def run_cli(argv: list[str] | None = None, *, settings: Optional[Settings] = Non
         elif args.command == "bugs" and args.bugs_command == "history":
             result = service.run_workflow("bug-history", filters={"bug_id": args.bug_id})
         elif args.command == "bugs":
+            filters = {"where": args.where} if hasattr(args, "where") and args.where else None
             result = service.run_workflow(
                 args.bugs_command,
                 entity=args.entity,
+                filters=filters,
                 limit=args.limit,
                 history_mode=getattr(args, "history_mode", None),
             )
         elif args.command == "reports" and args.reports_command == "build-dataset":
+            filters = {"where": args.where} if getattr(args, "where", None) else None
             result = service.run_workflow(
                 "build-dataset",
                 entity=args.entity,
+                filters=filters,
                 limit=args.limit,
                 history_mode=getattr(args, "history_mode", None),
             )

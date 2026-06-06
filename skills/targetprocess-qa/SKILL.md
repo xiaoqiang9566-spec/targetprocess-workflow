@@ -30,6 +30,7 @@ Important flow details:
 
 - `config/workflow_rules.yaml` supplies `default_scope`, `default_select`, status groups, stale threshold, reopen threshold, and high-risk severities.
 - Workflow commands automatically merge `default_scope` into the `where` filter and `default_select` into the `select` projection.
+- `bugs review-export` and `reports build-dataset` accept `--where` to further narrow the configured workflow scope; the clause is appended to `default_scope`, not used to replace it.
 - `review-export` does not narrow by status; it returns all bug records within the configured scope.
 - `triage-view`, `risk-scan`, and `review-export` only fan out into per-bug history when `--history-mode full` is requested.
 - `risk-scan` filters out records without `risk_signals`.
@@ -42,8 +43,9 @@ When the request is "pull all current bugs" or similar:
 1. Run `python -m tp_codex.cli healthcheck --format json` first.
 2. Confirm auth succeeds and note the active rules scope from `config/workflow_rules.yaml`.
 3. Run `python -m tp_codex.cli bugs review-export --format json` for analysis or `--format csv --output <path>` for delivery.
-4. Summarize the returned `summary.total_records`, `by_status_group`, and `by_severity`.
-5. Call out that "all current bugs" in this toolkit means "all bugs in the configured workflow scope", not automatically "only open bugs".
+4. When the caller needs a narrower export, add `--where '<Targetprocess clause>'`, for example `--where 'CreateDate >= "2026-01-01" and CreateDate < "2027-01-01"'`.
+5. Summarize the returned `summary.total_records`, `by_status_group`, and `by_severity`.
+6. Call out that "all current bugs" in this toolkit means "all bugs in the configured workflow scope", not automatically "only open bugs".
 
 ## Troubleshooting
 

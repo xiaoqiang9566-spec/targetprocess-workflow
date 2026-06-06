@@ -32,9 +32,11 @@ python -m tp_codex.cli bugs regression-queue --format json
 python -m tp_codex.cli bugs risk-scan --format markdown
 python -m tp_codex.cli bugs risk-scan --history-mode full --format markdown
 python -m tp_codex.cli bugs review-export --format csv
+python -m tp_codex.cli bugs review-export --where 'CreateDate >= "2026-01-01" and CreateDate < "2027-01-01"' --format csv
 python -m tp_codex.cli bugs review-export --history-mode full --format csv
 python -m tp_codex.cli bugs history --bug-id 12345 --format json
 python -m tp_codex.cli reports build-dataset --format csv --output outputs/datasets/bug_master.csv
+python -m tp_codex.cli reports build-dataset --where 'CreateDate >= "2026-01-01" and CreateDate < "2027-01-01"' --format csv
 python -m tp_codex.cli reports build-workbook --output outputs/datasets/quality-analysis-workbook.xlsx
 python -m tp_codex.cli reports weekly-report --week-label Week23 --template weekly-template.xlsx --output outputs/reports/weekly/2026-06-05/weekly-report-Week23.xlsx
 python -m tp_codex.cli reports monthly-audit --month-label 2026-06 --output outputs/reports/monthly/2026-06/monthly-audit-2026-06.xlsx
@@ -59,6 +61,8 @@ python scripts/tp_history_mode_benchmark.py --limit 5
 `bugs intake`, `bugs triage-view`, `bugs regression-queue`, `bugs risk-scan`, and `bugs review-export` automatically apply the defaults from `config/workflow_rules.yaml`.
 
 `bugs review-export` and the direct `reports build-dataset` command batch-query `BugSimpleHistory` snapshots by default to derive first-entered status timestamps, but they do not expose raw `history` unless `--history-mode full` is explicitly requested.
+
+`bugs review-export` and `reports build-dataset` also accept `--where` for extra Targetprocess filtering. The clause is appended to the configured `default_scope`, not used as a replacement for it.
 
 `bugs triage-view` and `bugs risk-scan` still default to `--history-mode off`. Use `--history-mode full` only when the caller explicitly needs per-bug history details in those workflow results.
 
