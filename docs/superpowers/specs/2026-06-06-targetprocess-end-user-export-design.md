@@ -95,14 +95,40 @@ It matches the current codebase, preserves execution efficiency, and gives end u
 
 ## Business Semantics for the First Release
 
-The first release should explicitly support these high-frequency semantics and their combinations:
+The first release should explicitly support these initial high-frequency semantics and their combinations:
 
 - "新增" = `CreateDate`
 - "有变更记录" = `ModifyDate`
 - "Driver 组" = `Team.Name == "ESW China NG3 Driver"`
 - "未闭环" = bug state not mapped into `workflow_rules.closed`
 
+These are the initial seed semantics, not the final complete catalog.
+
 These definitions are chosen because they are already derivable from the main bug query and current workflow rules, which avoids extra history fan-out.
+
+## Semantic Expansion Policy
+
+The skill must be designed to support more than the initial four examples.
+
+The architecture should treat export semantics as an extensible catalog with two classes:
+
+1. **Structured high-frequency semantics**
+   - Common user intents that are stable, repeated, and performance-sensitive
+   - Implemented through dedicated CLI structured filters plus skill translation
+   - Example: created time, updated time, team alias, open/closed state
+
+2. **Long-tail freeform semantics**
+   - Less common, more complex, or field-specific requests
+   - Implemented through skill translation to raw `--where`
+   - Example: product/version/feature-specific boolean expressions
+
+New semantics must be evaluated against this rule:
+
+- If the semantic is common, stable, and can be derived from the main bug query without extra fan-out, promote it into the structured CLI surface.
+- If the semantic is rare, ambiguous, or requires flexible field logic, keep it in the skill layer and translate it to raw `--where`.
+- If the semantic would require per-bug history fan-out for routine use, do not promote it into the default structured path without a separate performance review.
+
+This keeps the architecture open for growth without forcing every new phrase into the CLI.
 
 ### Semantics intentionally not included in v1
 
@@ -176,8 +202,8 @@ This definition must be implemented from the workflow rules file so the CLI and 
 The skill is the end-user entrypoint. Its job is not to execute freeform Targetprocess logic directly. Its job is to:
 
 1. Recognize supported business intents
-2. Map them into structured CLI filters
-3. Fall back to raw `--where` only when the request is outside the structured surface
+2. Map them into structured CLI filters when the intent belongs to the structured catalog
+3. Fall back to raw `--where` when the request is outside the structured catalog
 4. Choose `review-export` or `build-dataset` based on the delivery need
 
 ### Command selection
@@ -225,6 +251,28 @@ When the fallback is used, the skill should still preserve the same delivery con
 
 - prefer CSV for large handoff outputs
 - call out that filtering still happens inside the configured workflow scope
+
+### Adding new semantics later
+
+When a new user-facing export phrase appears, the maintenance process should be:
+
+1. Normalize the phrase into a candidate semantic definition.
+2. Decide whether it belongs to the structured catalog or the raw fallback path.
+3. If structured:
+   - add or reuse a CLI structured filter
+   - add skill translation coverage
+   - add CLI/service tests for filter compilation
+4. If raw fallback:
+   - add skill translation coverage only
+   - keep the core CLI surface unchanged
+5. If the new semantic changes a business definition that users depend on, update the design spec and the project skill documentation.
+
+Examples of future additions that may be promoted later if demand is high:
+
+- customer feedback bugs
+- high-risk bugs
+- product-specific exports
+- severity-scoped exports
 
 ## Performance Requirements
 
