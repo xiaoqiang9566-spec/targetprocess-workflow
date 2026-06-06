@@ -284,14 +284,23 @@ def run_cli(argv: list[str] | None = None, *, settings: Optional[Settings] = Non
         elif args.command == "bugs" and args.bugs_command == "history":
             result = service.run_workflow("bug-history", filters={"bug_id": args.bug_id})
         elif args.command == "bugs":
-            filters = {"where": args.where} if hasattr(args, "where") and args.where else None
-            result = service.run_workflow(
-                args.bugs_command,
-                entity=args.entity,
-                filters=filters,
-                limit=args.limit,
-                history_mode=getattr(args, "history_mode", None),
-            )
+            filters = {"where": args.where} if getattr(args, "where", None) else None
+            if args.bugs_command == "review-export" and output_format == "csv":
+                result = service.run_workflow(
+                    "build-dataset",
+                    entity=args.entity,
+                    filters=filters,
+                    limit=args.limit,
+                    history_mode=getattr(args, "history_mode", None),
+                )
+            else:
+                result = service.run_workflow(
+                    args.bugs_command,
+                    entity=args.entity,
+                    filters=filters,
+                    limit=args.limit,
+                    history_mode=getattr(args, "history_mode", None),
+                )
         elif args.command == "reports" and args.reports_command == "build-dataset":
             filters = {"where": args.where} if getattr(args, "where", None) else None
             result = service.run_workflow(

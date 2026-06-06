@@ -42,7 +42,7 @@ When the request is "pull all current bugs" or similar:
 
 1. Run `python -m tp_codex.cli healthcheck --format json` first.
 2. Confirm auth succeeds and note the active rules scope from `config/workflow_rules.yaml`.
-3. Run `python -m tp_codex.cli bugs review-export --format json` for analysis or `--format csv --output <path>` for delivery.
+3. Run `python -m tp_codex.cli bugs review-export --format json` for analysis or `--format csv --output <path>` for delivery. In this project, the CSV variant emits the full `bug_master` / `BUG_DATASET_FIELDNAMES` column set.
 4. When the caller needs a narrower export, add `--where '<Targetprocess clause>'`, for example `--where 'CreateDate >= "2026-01-01" and CreateDate < "2027-01-01"'`.
 5. Summarize the returned `summary.total_records`, `by_status_group`, and `by_severity`.
 6. Call out that "all current bugs" in this toolkit means "all bugs in the configured workflow scope", not automatically "only open bugs".

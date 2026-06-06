@@ -49,6 +49,7 @@ python scripts/tp_history_mode_benchmark.py --limit 5
 ## Reporting Outputs
 
 - `reports build-dataset` 生成标准化 `bug_master` 数据集，可输出 `json` 或 `csv`
+- `bugs review-export --format csv` 现在也输出完整 `bug_master` / `BUG_DATASET_FIELDNAMES` 明细列，便于直接交付当前 scope 的全量 bug 表
 - `reports build-workbook` 生成质量分析工作簿 `.xlsx`
 - `reports weekly-report` 基于累计周报模板追加新的周报 sheet
 - `reports monthly-audit` 生成月审工作簿 `.xlsx`

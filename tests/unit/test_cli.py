@@ -6,6 +6,7 @@ import zipfile
 from pathlib import Path
 
 from tp_codex.cli import build_parser, run_cli
+from tp_codex.datasets import BUG_DATASET_FIELDNAMES
 from tp_codex.gateway import MemoryGateway
 from tp_codex.settings import AuthSettings, Settings, WorkflowRulesSettings
 from tp_codex.workbooks import WorkbookRow, WorkbookSheet, _build_xlsx
@@ -485,10 +486,12 @@ def test_cli_review_export_outputs_expanded_csv(capsys):
                     "Id": 101,
                     "Name": "Crash on launch",
                     "EntityType": {"Name": "Bug"},
-                    "Severity": {"Name": "High"},
-                    "EntityState": {"Name": "Ready for QA"},
-                    "Owner": {"FirstName": "QA", "LastName": "User"},
-                    "Team": {"Name": "ESW UI Team"},
+                    "Project": {"Name": "Suunto work"},
+                    "Severity": {"Name": "Critical"},
+                    "Priority": {"Name": "High"},
+                    "EntityState": {"Name": "New"},
+                    "Owner": None,
+                    "Team": {"Name": "ESW China NG3 Driver"},
                     "Reproducibility": {"Name": "Always"},
                     "Products": [{"Name": "Watch A"}, {"Name": "Watch B"}],
                     "Firmwareversion": "FW-9.8.7",
@@ -496,8 +499,12 @@ def test_cli_review_export_outputs_expanded_csv(capsys):
                     "Suuntoappplatform": "Android",
                     "Suuntoappversion": "2.0.1",
                     "Feature": [{"Id": 501}, {"Id": 502}],
+                    "UserStory": [{"Id": 601}],
+                    "LastStateChangeDate": "2026-06-02T00:00:00+00:00",
                     "CreateDate": "2026-06-01T00:00:00+00:00",
                     "ModifyDate": "2026-06-03T00:00:00+00:00",
+                    "ReopenCount": 1,
+                    "Tags": [{"Name": "customer feedback"}],
                 }
             ],
                 "BugSimpleHistory": [
@@ -518,7 +525,12 @@ def test_cli_review_export_outputs_expanded_csv(capsys):
     settings = Settings(
         base_url="https://example.tpondemand.com",
         auth=AuthSettings(mode="access_token", secret="token"),
-        workflow_rules=WorkflowRulesSettings(status_groups={"ready_for_qa": ["Ready for QA"]}),
+        workflow_rules=WorkflowRulesSettings(
+            status_groups={"triage": ["New"]},
+            high_risk_severities=["Critical"],
+            stale_days=5,
+            default_scope={"team": ["ESW China NG3 Driver"]},
+        ),
     )
 
     exit_code = run_cli(
@@ -529,12 +541,22 @@ def test_cli_review_export_outputs_expanded_csv(capsys):
 
     assert exit_code == 0
     payload = capsys.readouterr().out
-    row = next(csv.DictReader(io.StringIO(payload)))
-    assert row["bug_id"] == "101"
-    assert row["status_group"] == "ready_for_qa"
-    assert row["entered_new_at"] == "2026-06-01T00:00:00+00:00"
-    assert row["entered_ready_for_qa_at"] == "2026-06-02T00:00:00+00:00"
-    assert row["linked_feature_ids"] == "501; 502"
+    rows = list(csv.DictReader(io.StringIO(payload)))
+    assert list(rows[0].keys())[: len(BUG_DATASET_FIELDNAMES)] == BUG_DATASET_FIELDNAMES
+    assert rows[0]["entered_new_at"] == "2026-06-01T00:00:00+00:00"
+    assert rows[0]["entered_ready_for_qa_at"] == "2026-06-02T00:00:00+00:00"
+    assert rows[0]["project"] == "Suunto work"
+    assert rows[0]["priority"] == "High"
+    assert rows[0]["status_group"] == "triage"
+    assert rows[0]["created_week"] == "2026-W23"
+    assert rows[0]["quality_bucket"] == "customer_feedback"
+    assert rows[0]["audit_focus"] == "owner_missing"
+    assert rows[0]["team_scope_label"] == "default_scope_team"
+    assert rows[0]["linked_feature_ids"] == "501; 502"
+    assert rows[0]["linked_user_story_ids"] == "601"
+    assert rows[0]["data_gaps"] == "owner"
+    assert "high_severity" in rows[0]["risk_signals"]
+    assert "missing_owner" in rows[0]["risk_signals"]
 
 
 def test_cli_review_export_default_json_omits_history_but_includes_status_timestamps(capsys):
@@ -553,17 +575,17 @@ def test_cli_review_export_default_json_omits_history_but_includes_status_timest
                     "ModifyDate": "2026-06-03T00:00:00+00:00",
                 }
             ],
-                "BugSimpleHistory": [
-                    {
-                        "Date": "2026-06-01T00:00:00+00:00",
-                        "EntityState": {"Name": "New"},
-                        "Bug": {"Id": 101, "Name": "Crash on launch"},
-                    },
-                    {
-                        "Date": "2026-06-02T00:00:00+00:00",
-                        "EntityState": {"Name": "Ready for QA"},
-                        "Bug": {"Id": 101, "Name": "Crash on launch"},
-                    }
+            "BugSimpleHistory": [
+                {
+                    "Date": "2026-06-01T00:00:00+00:00",
+                    "EntityState": {"Name": "New"},
+                    "Bug": {"Id": 101, "Name": "Crash on launch"},
+                },
+                {
+                    "Date": "2026-06-02T00:00:00+00:00",
+                    "EntityState": {"Name": "Ready for QA"},
+                    "Bug": {"Id": 101, "Name": "Crash on launch"},
+                },
             ],
         },
     )
@@ -1421,10 +1443,12 @@ def test_cli_review_export_writes_csv_to_output_file(tmp_path, capsys):
                     "Id": 101,
                     "Name": "Crash on launch",
                     "EntityType": {"Name": "Bug"},
-                    "Severity": {"Name": "High"},
-                    "EntityState": {"Name": "Ready for QA"},
-                    "Owner": {"FirstName": "QA", "LastName": "User"},
-                    "Team": {"Name": "ESW UI Team"},
+                    "Project": {"Name": "Suunto work"},
+                    "Severity": {"Name": "Critical"},
+                    "Priority": {"Name": "High"},
+                    "EntityState": {"Name": "New"},
+                    "Owner": None,
+                    "Team": {"Name": "ESW China NG3 Driver"},
                     "Reproducibility": {"Name": "Always"},
                     "Products": [{"Name": "Watch A"}, {"Name": "Watch B"}],
                     "Firmwareversion": "FW-9.8.7",
@@ -1432,8 +1456,12 @@ def test_cli_review_export_writes_csv_to_output_file(tmp_path, capsys):
                     "Suuntoappplatform": "Android",
                     "Suuntoappversion": "2.0.1",
                     "Feature": [{"Id": 501}, {"Id": 502}],
+                    "UserStory": [{"Id": 601}],
+                    "LastStateChangeDate": "2026-06-02T00:00:00+00:00",
                     "CreateDate": "2026-06-01T00:00:00+00:00",
                     "ModifyDate": "2026-06-03T00:00:00+00:00",
+                    "ReopenCount": 1,
+                    "Tags": [{"Name": "customer feedback"}],
                 }
             ]
         }
@@ -1441,7 +1469,12 @@ def test_cli_review_export_writes_csv_to_output_file(tmp_path, capsys):
     settings = Settings(
         base_url="https://example.tpondemand.com",
         auth=AuthSettings(mode="access_token", secret="token"),
-        workflow_rules=WorkflowRulesSettings(status_groups={"ready_for_qa": ["Ready for QA"]}),
+        workflow_rules=WorkflowRulesSettings(
+            status_groups={"triage": ["New"]},
+            high_risk_severities=["Critical"],
+            stale_days=5,
+            default_scope={"team": ["ESW China NG3 Driver"]},
+        ),
     )
     output_path = tmp_path / "exports" / "review-export.csv"
 
@@ -1454,8 +1487,12 @@ def test_cli_review_export_writes_csv_to_output_file(tmp_path, capsys):
     assert exit_code == 0
     assert capsys.readouterr().out == ""
     payload = output_path.read_text(encoding="utf-8")
-    assert "bug_id,name,status_raw,status_group,severity,owner,updated_at,team,suunto_app_version,suunto_app_platform,products,firmware_version,reproducibility,bug_category,linked_feature_ids" in payload
-    assert "101,Crash on launch,Ready for QA,ready_for_qa,High,QA User,2026-06-03T00:00:00+00:00,ESW UI Team,2.0.1,Android,Watch A; Watch B,FW-9.8.7,Always,Regression,501; 502" in payload
+    rows = list(csv.DictReader(io.StringIO(payload)))
+
+    assert list(rows[0].keys())[: len(BUG_DATASET_FIELDNAMES)] == BUG_DATASET_FIELDNAMES
+    assert rows[0]["entered_new_at"] == "2026-06-01T00:00:00+00:00"
+    assert rows[0]["quality_bucket"] == "customer_feedback"
+    assert rows[0]["linked_user_story_ids"] == "601"
 
 
 def test_cli_falls_back_when_stdout_encoding_cannot_encode_payload(monkeypatch):
