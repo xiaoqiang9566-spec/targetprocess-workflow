@@ -418,6 +418,64 @@ def test_build_dataset_workflow_uses_scope_and_dataset_select():
     assert "Tags" in captured["filters"]["select"]
 
 
+def test_review_export_workflow_merges_explicit_where_with_default_scope():
+    gateway = MemoryGateway(entities={"Bug": []})
+    captured = {}
+
+    def capture_list_entities(entity, filters=None, limit=None):
+        captured["filters"] = filters
+        return QueryResult(items=[], total_count=0)
+
+    gateway.list_entities = capture_list_entities
+    settings = Settings(
+        base_url="https://example.tpondemand.com",
+        auth=AuthSettings(mode="access_token", secret="token"),
+        workflow_rules=WorkflowRulesSettings(
+            default_scope={
+                "project": ["Suunto work"],
+                "team": ["ESW UI Team"],
+            }
+        ),
+    )
+    service = TargetprocessService(settings=settings, gateway=gateway)
+
+    service.run_workflow("review-export", entity="Bug", filters={"where": 'CreateDate >= "2026-01-01"'})
+
+    assert captured["filters"] == {
+        "where": '((Project.Name == "Suunto work") and (Team.Name == "ESW UI Team")) and (CreateDate >= "2026-01-01")'
+    }
+
+
+def test_build_dataset_workflow_merges_explicit_where_and_preserves_dataset_select():
+    gateway = MemoryGateway(entities={"Bug": []})
+    captured = {}
+
+    def capture_list_entities(entity, filters=None, limit=None):
+        captured["filters"] = filters
+        return QueryResult(items=[], total_count=0)
+
+    gateway.list_entities = capture_list_entities
+    settings = Settings(
+        base_url="https://example.tpondemand.com",
+        auth=AuthSettings(mode="access_token", secret="token"),
+        workflow_rules=WorkflowRulesSettings(
+            default_scope={
+                "project": ["Suunto work"],
+                "team": ["ESW China NG3 Driver"],
+            },
+            default_select=["Id", "Name"],
+        ),
+    )
+    service = TargetprocessService(settings=settings, gateway=gateway)
+
+    service.run_workflow("build-dataset", entity="Bug", filters={"where": 'CreateDate >= "2026-01-01"'})
+
+    assert captured["filters"]["where"] == '((Project.Name == "Suunto work") and (Team.Name == "ESW China NG3 Driver")) and (CreateDate >= "2026-01-01")'
+    assert captured["filters"]["select"] != "{Id,Name}"
+    assert "Description" in captured["filters"]["select"]
+    assert "Tags" in captured["filters"]["select"]
+
+
 def test_build_dataset_workflow_full_history_mode_adds_status_timestamps_and_recomputes_reopen_count():
     gateway = MemoryGateway(
         entities={

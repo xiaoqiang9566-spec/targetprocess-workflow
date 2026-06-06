@@ -82,6 +82,14 @@ def test_build_parser_build_dataset_accepts_history_mode():
     assert args.history_mode == "full"
 
 
+def test_build_parser_build_dataset_accepts_where():
+    parser = build_parser()
+
+    args = parser.parse_args(["reports", "build-dataset", "--where", 'CreateDate >= "2026-01-01"'])
+
+    assert args.where == 'CreateDate >= "2026-01-01"'
+
+
 def test_build_parser_includes_reports_build_workbook_command():
     parser = build_parser()
 
@@ -216,6 +224,14 @@ def test_history_mode_accepts_full_for_history_backed_bug_workflows():
     assert review_args.history_mode == "full"
 
 
+def test_review_export_accepts_where():
+    parser = build_parser()
+
+    args = parser.parse_args(["bugs", "review-export", "--where", 'CreateDate >= "2026-01-01"'])
+
+    assert args.where == 'CreateDate >= "2026-01-01"'
+
+
 def test_history_mode_is_not_available_for_unrelated_bug_workflows():
     parser = build_parser()
 
@@ -226,6 +242,23 @@ def test_history_mode_is_not_available_for_unrelated_bug_workflows():
     assert not hasattr(intake_args, "history_mode")
     assert not hasattr(regression_args, "history_mode")
     assert not hasattr(history_args, "history_mode")
+
+
+def test_where_is_not_available_for_unrelated_workflows():
+    parser = build_parser()
+
+    for argv in [
+        ["bugs", "intake", "--where", 'CreateDate >= "2026-01-01"'],
+        ["bugs", "triage-view", "--where", 'CreateDate >= "2026-01-01"'],
+        ["bugs", "risk-scan", "--where", 'CreateDate >= "2026-01-01"'],
+        ["reports", "build-workbook", "--where", 'CreateDate >= "2026-01-01"'],
+    ]:
+        try:
+            parser.parse_args(argv)
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:  # pragma: no cover - defensive
+            raise AssertionError(f"--where unexpectedly accepted for argv={argv}")
 
 
 def test_cli_uses_explicit_config_paths(tmp_path, capsys):
@@ -555,6 +588,36 @@ def test_cli_review_export_default_json_omits_history_but_includes_status_timest
     assert record["entered_ready_for_qa_at"] == "2026-06-02T00:00:00+00:00"
 
 
+def test_cli_review_export_passes_where_filter(capsys):
+    gateway = MemoryGateway(entities={"Bug": []})
+    captured = {}
+
+    def capture_list_entities(entity, filters=None, limit=None):
+        captured["entity"] = entity
+        captured["filters"] = filters
+        captured["limit"] = limit
+        return MemoryGateway.list_entities(gateway, entity, filters, limit)
+
+    gateway.list_entities = capture_list_entities
+    settings = Settings(
+        base_url="https://example.tpondemand.com",
+        auth=AuthSettings(mode="access_token", secret="token"),
+        workflow_rules=WorkflowRulesSettings(default_scope={"team": ["ESW UI Team"]}),
+    )
+
+    exit_code = run_cli(
+        ["bugs", "review-export", "--where", 'CreateDate >= "2026-01-01"', "--format", "json"],
+        settings=settings,
+        gateway=gateway,
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out)["summary"]["total_records"] == 0
+    assert captured["entity"] == "Bug"
+    assert captured["limit"] is None
+    assert captured["filters"]["where"] == '(Team.Name == "ESW UI Team") and (CreateDate >= "2026-01-01")'
+
+
 def test_cli_review_export_full_history_mode_keeps_history_and_status_timestamps(capsys):
     gateway = MemoryGateway(
         entities={
@@ -673,6 +736,48 @@ def test_cli_build_dataset_outputs_csv_with_reporting_columns(capsys):
     assert row["entered_in_progress_at"] == "2026-05-28T00:00:00+00:00"
     assert row["entered_in_testing_at"] == "2026-05-29T00:00:00+00:00"
     assert row["reopen_count"] == "1"
+
+
+def test_cli_build_dataset_passes_where_filter(capsys):
+    gateway = MemoryGateway(entities={"Bug": []})
+    captured = {}
+
+    def capture_list_entities(entity, filters=None, limit=None):
+        captured["entity"] = entity
+        captured["filters"] = filters
+        captured["limit"] = limit
+        return MemoryGateway.list_entities(gateway, entity, filters, limit)
+
+    gateway.list_entities = capture_list_entities
+    settings = Settings(
+        base_url="https://example.tpondemand.com",
+        auth=AuthSettings(mode="access_token", secret="token"),
+        workflow_rules=WorkflowRulesSettings(
+            default_scope={"project": ["Suunto work"], "team": ["ESW China NG3 Driver"]},
+            default_select=["Id", "Name"],
+        ),
+    )
+
+    exit_code = run_cli(
+        [
+            "reports",
+            "build-dataset",
+            "--where",
+            'CreateDate >= "2026-01-01"',
+            "--format",
+            "json",
+        ],
+        settings=settings,
+        gateway=gateway,
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out)["summary"]["total_records"] == 0
+    assert captured["entity"] == "Bug"
+    assert captured["limit"] is None
+    assert captured["filters"]["where"] == '((Project.Name == "Suunto work") and (Team.Name == "ESW China NG3 Driver")) and (CreateDate >= "2026-01-01")'
+    assert "Description" in captured["filters"]["select"]
+    assert captured["filters"]["select"] != "{Id,Name}"
 
 
 def test_cli_build_dataset_full_history_mode_keeps_history_and_outputs_status_timestamp_columns(capsys):
