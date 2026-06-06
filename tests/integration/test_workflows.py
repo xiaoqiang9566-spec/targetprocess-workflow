@@ -1,7 +1,6 @@
 import io
 import zipfile
 from xml.etree import ElementTree as ET
-from pathlib import Path
 
 from tp_codex.gateway import MemoryGateway, QueryResult
 from tp_codex.errors import UpstreamOrTimeoutError

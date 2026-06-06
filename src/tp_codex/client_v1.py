@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tp_codex.gateway import HttpGateway, MemoryGateway, QueryResult
+from tp_codex.gateway import HttpGateway, MemoryGateway
 
 
 class TargetprocessClientV1:

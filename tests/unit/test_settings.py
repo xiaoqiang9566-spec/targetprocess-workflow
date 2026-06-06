@@ -1,5 +1,3 @@
-import os
-
 import pytest
 
 from tp_codex.errors import ConfigError

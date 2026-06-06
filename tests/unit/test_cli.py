@@ -3,7 +3,6 @@ import io
 import json
 import sys
 import zipfile
-from pathlib import Path
 
 from tp_codex.cli import build_parser, run_cli
 from tp_codex.datasets import BUG_DATASET_FIELDNAMES
@@ -1446,8 +1445,6 @@ def _minimal_weekly_template_bytes() -> bytes:
         rows=[WorkbookRow(["辅助"], kind="title")],
     )
     return _build_xlsx([weekly_sheet, helper_sheet], "2026-06-05T00:00:00+00:00")
-    assert "- Products: Watch A, Watch B" in payload
-    assert "- `high_severity`: Bug severity is in the high-risk list" in payload
 
 
 def test_cli_review_export_writes_csv_to_output_file(tmp_path, capsys):

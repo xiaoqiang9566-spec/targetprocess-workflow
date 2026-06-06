@@ -1,7 +1,8 @@
 # Targetprocess QA Automation Agent Notes
 
-- Before working in this project, read and follow the project-specific experience playbook:
-  `D:\3681\Documents\Targetprocess\docs\codex-project-experience-playbook.md`
+- Before working in this project, read and follow these project documents:
+  `/Users/xiaoqiang/Documents/targetprocess/docs/codex-project-experience-playbook.md`
+  `/Users/xiaoqiang/Documents/targetprocess/docs/codex-retrospective-profile.md`
 
 - Use `python -m tp_codex.cli` as the stable entrypoint.
 - Keep all workflows read-only. Do not add create, update, or transition commands.

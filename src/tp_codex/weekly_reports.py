@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Sequence
 from xml.etree import ElementTree as ET
 from zipfile import ZIP_DEFLATED, ZipFile
 from io import BytesIO
@@ -724,7 +724,6 @@ def _update_app_properties(entries: dict[str, bytes], sheet_name: str) -> None:
     if "docProps/app.xml" not in entries:
         return
     root = ET.fromstring(entries["docProps/app.xml"])
-    titles_vector = root.find(f".//{{{VT_NS}}}vector")
     titles_container = root.find(f".//{{{APP_NS}}}TitlesOfParts/{{{VT_NS}}}vector")
     if titles_container is not None:
         ET.SubElement(titles_container, f"{{{VT_NS}}}lpstr").text = sheet_name
