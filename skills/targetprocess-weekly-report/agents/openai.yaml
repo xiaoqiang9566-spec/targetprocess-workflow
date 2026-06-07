@@ -1,0 +1,4 @@
+interface:
+  display_name: "Targetprocess Weekly Report"
+  short_description: "Generate project weekly QA reports from bug snapshots"
+  default_prompt: "Use $targetprocess-weekly-report to build or repair a Targetprocess weekly QA workbook from an existing bug snapshot and Excel template."
