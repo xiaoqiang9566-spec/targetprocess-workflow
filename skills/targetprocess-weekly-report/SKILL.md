@@ -1,6 +1,6 @@
 ---
 name: targetprocess-weekly-report
-description: Build, repair, or validate weekly QA report workbooks for this Targetprocess project from existing bug snapshot bundles and Excel templates. Use when Codex is asked to generate `WeekNN` weekly reports, reuse `bug_master.json/csv` from `outputs/reports/weekly/...`, fix formatting or content mismatches in `weekly-report-WeekNN.xlsx`, align a report strictly to a provided `.xlsx` template, or decide whether to use `python -m tp_codex.cli reports weekly-report` versus a manual template-driven rebuild.
+description: Build, repair, or validate weekly QA report workbooks for this Targetprocess project from existing bug snapshot bundles and Excel templates. Use when Codex is asked to generate `WeekNN` weekly reports, reuse `bug_master.json/csv` from `outputs/reports/weekly/...`, fix formatting or content mismatches in `weekly-report-WeekNN.xlsx`, align a report strictly to a provided `.xlsx` template, validate weekly product scope, or correct NG3 versus `Race 3S/Race3` reporting semantics.
 ---
 
 # Targetprocess Weekly Report
@@ -39,6 +39,10 @@ Create or repair weekly QA report workbooks for this repo while preserving the u
 - Do not assume the three default teams always equal the product scope required by the report.
 - Check whether the template is asking for a multi-product workbook or an NG3-only page before counting records.
 - If totals look too large or UI-heavy, inspect product distribution and status mix before filling cells.
+- Treat the default three-team live scope as `NG3 platform scope`, not as the `NG3` product total.
+- Before filling any `NG3` count, inspect `Products` distribution and split out configured product sections.
+- `Race 3S/Race3` is an NG3-platform new product and must remain separate from the NG3 legacy-product count.
+- If `Products` is empty or ambiguous, report the ambiguity instead of silently merging the record into NG3.
 
 5. Generate the workbook in the least risky way.
 

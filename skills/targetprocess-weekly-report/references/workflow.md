@@ -73,6 +73,28 @@ When the template is NG3-only, team-level counts may still include records tied 
 
 Do not fill an NG3-only template until the scope aligns with the template's sections.
 
+### NG3 platform scope versus NG3 legacy product
+
+The default live pull for this project is usually scoped to the three NG3-platform teams:
+
+- `ESW China NG3 Driver`
+- `ESW China NG3 Framework`
+- `ESW UI Team`
+
+That scope means "NG3 platform team data". It does not automatically mean the `NG3` product section in the weekly report.
+
+For weekly reporting:
+
+- `Race 3S/Race3` is an NG3-platform new product and must be counted as its own product section.
+- `NG3` should mean the NG3 legacy product-model collection.
+- Always inspect `products` before reporting a number as `NG3`.
+- If a record has empty or unrecognized `products`, keep it in a review bucket or explicitly state that the historical team fallback was used.
+
+The previous mistake was describing a default-scope weekly-new count such as `60` as `NG3 本周新增 60`. The correct wording is either:
+
+- `NG3 平台三团队本周新增 60，需按 Products 继续拆分`
+- `NG3 老产品本周新增 N，Race 3S/Race3 本周新增 M`
+
 ## Manual Rebuild Guidance For A 42-row NG3 Template
 
 Use the provided template as the only source of layout truth.
@@ -132,6 +154,7 @@ Before handoff, verify:
 - Row count still matches the template shape.
 - Merged ranges are unchanged unless the user requested layout edits.
 - Key cells such as title, summaries, totals, and percentages contain current-week values.
+- Product-scope language distinguishes `NG3 platform scope`, `NG3 legacy product`, and `Race 3S/Race3`.
 - No stale prior-week summary text remains in manually curated sections.
 
 If the user says the workbook is "错乱" or "格式不对", compare the template and output first. In this workflow, structural mismatch is often more likely than bad arithmetic.
