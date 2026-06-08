@@ -8,6 +8,7 @@ reports/output/
 schema_cache/
 .spreadsheet-work/
 .tmp/
+.worktrees/
 outputs/
 customer-feedback-bugs.csv
 dashboard-bugs.csv
