@@ -173,6 +173,7 @@ class TargetprocessService:
         include_status_timestamps: bool = False,
     ) -> WorkflowResult:
         dataset_filters = dict(filters or {})
+        include_status_timestamps = bool(dataset_filters.pop("include_status_timestamps", include_status_timestamps))
         dataset_filters["select"] = self._format_select(BUG_DATASET_SELECT_FIELDS)
         dataset_filters = self._merge_default_bug_filters(dataset_filters)
         query = list_entities(self.gateway, entity, filters=dataset_filters, limit=limit)
@@ -275,6 +276,7 @@ class TargetprocessService:
             dataset_result.records,
             week_label=week_label,
             generated_at=str(dataset_result.metadata["generated_at"]),
+            weekly_report_config=self.settings.workflow_rules.weekly_report,
         )
         metadata = dict(dataset_result.metadata)
         metadata["week_label"] = summary["week_label"]
@@ -287,6 +289,7 @@ class TargetprocessService:
                 week_label=week_label,
                 template_path=template_path,
                 generated_at=str(dataset_result.metadata["generated_at"]),
+                weekly_report_config=self.settings.workflow_rules.weekly_report,
             )
             artifacts.append(workbook_artifact)
             metadata["workbook_filename"] = workbook_artifact.filename

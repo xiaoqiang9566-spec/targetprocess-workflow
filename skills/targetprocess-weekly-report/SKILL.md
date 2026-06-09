@@ -31,6 +31,11 @@ Create or repair weekly QA report workbooks for this repo while preserving the u
 - Open the workbook and inspect sheet names, sheet count, row count, and merged ranges.
 - If the template matches the repo's multi-product weekly workbook pattern, use the built-in weekly report flow.
 - If the template is a single-sheet NG3 weekly workbook, rebuild directly from that template instead of blindly using the built-in generator.
+- Treat the NG3 weekly report page as four fixed tables: `2026年NG3固件每周新增Bug`, `NG3项目2026年固件有效bug检出&修复情况`, `2026年NG3固件售后问题`, and `NG3存量Bug消减情况`.
+- For `2026年NG3固件每周新增Bug`, apply the previous-week `CreateDate` filter, four-team weekly report scope, summary bullets, and status buckets defined in `references/workflow.md`.
+- For `NG3项目2026年固件有效bug检出&修复情况`, apply the 2026 `CreateDate` filter, effective-bug exclusions, four-team weekly report scope, status summary table, team summary table, and rate formulas defined in `references/workflow.md`.
+- For `2026年NG3固件售后问题`, apply the 2026 `CreateDate` filter, `Customer feedback` name inclusion, four-team weekly report scope, severity summary table, team summary table, and closure-rate rules defined in `references/workflow.md`.
+- For `NG3存量Bug消减情况`, apply the 2026 full-bug `CreateDate` filter, the creator exclusion rule, the four derived state buckets, and the stock-reduction formula defined in `references/workflow.md`.
 - When the template and the existing generator disagree, trust the template.
 
 4. Choose the data scope that matches the template, not just the team scope.
@@ -38,6 +43,7 @@ Create or repair weekly QA report workbooks for this repo while preserving the u
 - Start from the project default scope in `config/workflow_rules.yaml` when live data is needed.
 - Do not assume the three default teams always equal the product scope required by the report.
 - Check whether the template is asking for a multi-product workbook or an NG3-only page before counting records.
+- For NG3 weekly reports, do not split or exclude by `Products`. All `Products` values in the NG3 report data belong to the NG3 platform; `Products` is descriptive metadata only and must not drive product-level bug counts.
 - If totals look too large or UI-heavy, inspect product distribution and status mix before filling cells.
 - Treat the default three-team live scope as `NG3 platform scope`, not as the `NG3` product total.
 - Before filling any `NG3` count, inspect `Products` distribution and split out configured product sections.
@@ -62,4 +68,4 @@ Create or repair weekly QA report workbooks for this repo while preserving the u
 
 ## Reference Files
 
-- Read `references/workflow.md` for template-shape heuristics, scope pitfalls, manual rebuild guidance, and a validation checklist.
+- Read `references/workflow.md` for the four-table NG3 report structure, template-shape heuristics, scope pitfalls, manual rebuild guidance, and a validation checklist.

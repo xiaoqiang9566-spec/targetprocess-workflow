@@ -1009,13 +1009,16 @@ def test_cli_weekly_report_requires_template_for_xlsx(capsys):
     assert "--template is required for weekly-report xlsx" in capsys.readouterr().err
 
 
-def test_cli_weekly_report_requires_week_label_for_xlsx(capsys):
+def test_cli_weekly_report_defaults_week_label_for_xlsx(tmp_path, capsys):
     gateway = MemoryGateway(entities={"Bug": []})
     settings = Settings(
         base_url="https://example.tpondemand.com",
         auth=AuthSettings(mode="access_token", secret="token"),
         workflow_rules=WorkflowRulesSettings(status_groups={"triage": ["New"]}),
     )
+    template_path = tmp_path / "weekly-template.xlsx"
+    template_path.write_bytes(_minimal_weekly_template_bytes())
+    output_path = tmp_path / "weekly.xlsx"
 
     exit_code = run_cli(
         [
@@ -1024,16 +1027,17 @@ def test_cli_weekly_report_requires_week_label_for_xlsx(capsys):
             "--format",
             "xlsx",
             "--template",
-            "weekly-template.xlsx",
+            str(template_path),
             "--output",
-            "weekly.xlsx",
+            str(output_path),
         ],
         settings=settings,
         gateway=gateway,
     )
 
-    assert exit_code == 2
-    assert "--week-label is required for weekly-report" in capsys.readouterr().err
+    assert exit_code == 0
+    assert capsys.readouterr().out == ""
+    assert output_path.exists()
 
 
 def test_cli_monthly_audit_requires_month_label_for_xlsx(capsys):
@@ -1149,21 +1153,25 @@ def test_cli_run_weekly_requires_template(capsys):
     assert "--template is required for run-weekly" in capsys.readouterr().err
 
 
-def test_cli_run_weekly_requires_week_label(capsys):
+def test_cli_run_weekly_defaults_week_label(tmp_path, capsys):
     settings = Settings(
         base_url="https://example.tpondemand.com",
         auth=AuthSettings(mode="access_token", secret="token"),
         workflow_rules=WorkflowRulesSettings(status_groups={"triage": ["New"]}),
     )
+    template_path = tmp_path / "weekly-template.xlsx"
+    template_path.write_bytes(_minimal_weekly_template_bytes())
+    output_dir = tmp_path / "weekly-output"
 
     exit_code = run_cli(
-        ["reports", "run-weekly", "--template", "weekly-template.xlsx"],
+        ["reports", "run-weekly", "--template", str(template_path), "--output-dir", str(output_dir)],
         settings=settings,
         gateway=MemoryGateway(),
     )
 
-    assert exit_code == 2
-    assert "--week-label is required for run-weekly" in capsys.readouterr().err
+    assert exit_code == 0
+    assert capsys.readouterr().out == ""
+    assert list(output_dir.glob("质量周报-Week*.xlsx"))
 
 
 def test_cli_run_monthly_requires_month_label(capsys):
@@ -1209,6 +1217,13 @@ def test_cli_run_weekly_writes_output_bundle(tmp_path, capsys):
             ]
         }
     )
+    list_calls = []
+
+    def capture_list_entities(entity, filters=None, limit=None):
+        list_calls.append((entity, dict(filters or {}), limit))
+        return MemoryGateway.list_entities(gateway, entity, filters, limit)
+
+    gateway.list_entities = capture_list_entities
     settings = Settings(
         base_url="https://example.tpondemand.com",
         auth=AuthSettings(mode="access_token", secret="token"),
@@ -1241,19 +1256,24 @@ def test_cli_run_weekly_writes_output_bundle(tmp_path, capsys):
     assert capsys.readouterr().out == ""
     for name in [
         "healthcheck.json",
-        "bug_master.json",
-        "bug_master.csv",
-        "quality-analysis-workbook.xlsx",
-        "weekly-report-Week23.xlsx",
+        "weekly_new_bug_master.csv",
+        "full_bug_snapshot.csv",
+        "质量周报-Week23(2026.6.1-2026.6.7).xlsx",
         "send-summary.md",
         "run-metadata.json",
     ]:
         assert (output_dir / name).exists(), name
+    bug_calls = [call for call in list_calls if call[0] == "Bug"]
+    assert len(bug_calls) == 2
+    assert all(call[0] == "Bug" for call in list_calls)
+    assert 'CreateDate >= DateTime.Parse("2026-06-01")' in bug_calls[0][1]["where"]
+    assert 'CreateDate < DateTime.Parse("2026-06-08")' in bug_calls[0][1]["where"]
+    assert "CreateDate" not in bug_calls[1][1].get("where", "")
     manifest = json.loads((output_dir / "run-metadata.json").read_text(encoding="utf-8"))
     assert manifest["workflow"] == "run-weekly"
     assert manifest["report_kind"] == "weekly"
     assert manifest["report_label"] == "Week23"
-    assert "weekly-report-Week23.xlsx" in (output_dir / "send-summary.md").read_text(encoding="utf-8")
+    assert "质量周报-Week23(2026.6.1-2026.6.7).xlsx" in (output_dir / "send-summary.md").read_text(encoding="utf-8")
 
 
 def test_cli_run_monthly_writes_output_bundle(tmp_path, capsys):
@@ -1352,8 +1372,8 @@ def test_cli_send_writes_summary_from_manifest(tmp_path, capsys):
                     },
                 },
                 "attachments": [
-                    {"filename": "bug_master.csv"},
-                    {"filename": "weekly-report-Week23.xlsx"},
+                    {"filename": "weekly_new_bug_master.csv"},
+                    {"filename": "质量周报-Week23(2026.6.1-2026.6.7).xlsx"},
                 ],
             },
             ensure_ascii=False,
@@ -1385,7 +1405,7 @@ def test_cli_send_writes_summary_from_manifest(tmp_path, capsys):
     payload = summary_path.read_text(encoding="utf-8")
     assert "Week23" in payload
     assert "本次数据不完整" in payload
-    assert "weekly-report-Week23.xlsx" in payload
+    assert "质量周报-Week23(2026.6.1-2026.6.7).xlsx" in payload
 
 
 def test_cli_risk_scan_writes_markdown_to_output_file(tmp_path, capsys):

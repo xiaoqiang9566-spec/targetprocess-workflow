@@ -32,11 +32,11 @@ def test_build_send_markdown_renders_weekly_summary_with_partial_warning():
             },
         },
         attachments=[
-            {"filename": "bug_master.csv"},
-            {"filename": "quality-analysis-workbook.xlsx"},
-            {"filename": "weekly-report-Week23.xlsx"},
+            {"filename": "weekly_new_bug_master.csv"},
+            {"filename": "full_bug_snapshot.csv"},
+            {"filename": "质量周报-Week23(2026.6.1-2026.6.7).xlsx"},
         ],
-        output_dir="outputs/reports/weekly/2026-06-05",
+        output_dir="outputs/reports/weekly/2026-W23",
     )
 
     payload = build_send_markdown(manifest)
@@ -47,7 +47,7 @@ def test_build_send_markdown_renders_weekly_summary_with_partial_warning():
     assert "本周新增：3" in payload
     assert "NG3" in payload
     assert "Dilu" in payload
-    assert "weekly-report-Week23.xlsx" in payload
+    assert "质量周报-Week23(2026.6.1-2026.6.7).xlsx" in payload
 
 
 def test_build_send_markdown_renders_monthly_summary():

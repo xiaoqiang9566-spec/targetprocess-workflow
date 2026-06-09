@@ -12,12 +12,17 @@ from tp_codex.report_delivery import (
     build_run_manifest,
     build_send_markdown,
     default_monthly_output_dir,
-    default_weekly_output_dir,
     load_manifest,
 )
 from tp_codex.renderers import render_output
 from tp_codex.service import TargetprocessService
 from tp_codex.settings import Settings, load_settings
+from tp_codex.weekly_reports import (
+    build_weekly_created_where,
+    build_weekly_report_artifact,
+    build_weekly_report_summary,
+    resolve_week_context,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -148,42 +153,56 @@ def _collect_warnings(*warning_groups) -> list[str]:
 
 def _write_weekly_run_bundle(service: TargetprocessService, args) -> None:
     health_result = service.healthcheck()
-    dataset_result = service.run_workflow("build-dataset", entity=args.entity, limit=args.limit)
-    workbook_result = service.run_workflow("build-workbook", entity=args.entity, limit=args.limit)
-    weekly_result = service.run_workflow(
-        "weekly-report",
+    generated_at = str(health_result.metadata["generated_at"])
+    context = resolve_week_context(args.week_label, generated_at)
+    weekly_new_result = service.run_workflow(
+        "build-dataset",
         entity=args.entity,
         limit=args.limit,
-        filters={
-            "week_label": args.week_label,
-            "template_path": args.template,
-        },
+        filters={"where": build_weekly_created_where(context), "include_status_timestamps": False},
     )
-    generated_at = str(dataset_result.metadata["generated_at"])
-    output_dir = Path(args.output_dir) if args.output_dir else default_weekly_output_dir(generated_at)
-    report_artifact = weekly_result.artifacts[0]
-    workbook_artifact = workbook_result.artifacts[0]
+    full_snapshot_result = service.run_workflow(
+        "build-dataset",
+        entity=args.entity,
+        limit=args.limit,
+        filters={"include_status_timestamps": False},
+    )
+    report_summary = build_weekly_report_summary(
+        full_snapshot_result.records,
+        week_label=context.week_label,
+        generated_at=generated_at,
+        weekly_records=weekly_new_result.records,
+        weekly_report_config=service.settings.workflow_rules.weekly_report,
+    )
+    report_artifact = build_weekly_report_artifact(
+        full_snapshot_result.records,
+        week_label=context.week_label,
+        template_path=args.template,
+        generated_at=generated_at,
+        weekly_records=weekly_new_result.records,
+        weekly_report_config=service.settings.workflow_rules.weekly_report,
+    )
+    output_dir = Path(args.output_dir) if args.output_dir else Path("outputs") / "reports" / "weekly" / context.dataset_week
     attachments = [
-        {"filename": "bug_master.csv", "path": str(output_dir / "bug_master.csv")},
-        {"filename": workbook_artifact.filename, "path": str(output_dir / workbook_artifact.filename)},
+        {"filename": "weekly_new_bug_master.csv", "path": str(output_dir / "weekly_new_bug_master.csv")},
+        {"filename": "full_bug_snapshot.csv", "path": str(output_dir / "full_bug_snapshot.csv")},
         {"filename": report_artifact.filename, "path": str(output_dir / report_artifact.filename)},
     ]
-    warnings = _collect_warnings(dataset_result.warnings, workbook_result.warnings, weekly_result.warnings)
+    warnings = _collect_warnings(weekly_new_result.warnings, full_snapshot_result.warnings)
     manifest = build_run_manifest(
         workflow="run-weekly",
         report_kind="weekly",
-        report_label=str(weekly_result.summary.get("week_label") or args.week_label),
+        report_label=str(report_summary.get("week_label") or context.week_label),
         generated_at=generated_at,
         warnings=warnings,
         healthcheck=dict(health_result.records[0]),
-        dataset_summary=dict(dataset_result.summary),
-        report_summary=dict(weekly_result.summary),
+        dataset_summary=dict(full_snapshot_result.summary),
+        report_summary=dict(report_summary),
         attachments=attachments,
         generated_files=[
             "healthcheck.json",
-            "bug_master.json",
-            "bug_master.csv",
-            workbook_artifact.filename,
+            "weekly_new_bug_master.csv",
+            "full_bug_snapshot.csv",
             report_artifact.filename,
             "send-summary.md",
             "run-metadata.json",
@@ -193,10 +212,9 @@ def _write_weekly_run_bundle(service: TargetprocessService, args) -> None:
     send_summary = build_send_markdown(manifest)
 
     _write_output(output_dir / "healthcheck.json", render_output(health_result, "json"))
-    _write_output(output_dir / "bug_master.json", render_output(dataset_result, "json"))
-    _write_output(output_dir / "bug_master.csv", render_output(dataset_result, "csv"))
-    _write_output(output_dir / workbook_artifact.filename, render_output(workbook_result, "xlsx"))
-    _write_output(output_dir / report_artifact.filename, render_output(weekly_result, "xlsx"))
+    _write_output(output_dir / "weekly_new_bug_master.csv", render_output(weekly_new_result, "csv"))
+    _write_output(output_dir / "full_bug_snapshot.csv", render_output(full_snapshot_result, "csv"))
+    _write_output(output_dir / report_artifact.filename, report_artifact.content)
     _write_output(output_dir / "send-summary.md", send_summary)
     _write_output(output_dir / "run-metadata.json", _render_json_payload(manifest))
 
@@ -331,8 +349,6 @@ def run_cli(argv: list[str] | None = None, *, settings: Optional[Settings] = Non
         elif args.command == "reports" and args.reports_command == "run-weekly":
             if not args.template:
                 raise InvalidArgsError("--template is required for run-weekly")
-            if not args.week_label:
-                raise InvalidArgsError("--week-label is required for run-weekly")
             _write_weekly_run_bundle(service, args)
             return EXIT_CODES["SUCCESS"]
         elif args.command == "reports" and args.reports_command == "run-monthly":
@@ -348,8 +364,6 @@ def run_cli(argv: list[str] | None = None, *, settings: Optional[Settings] = Non
         if args.command == "reports" and args.reports_command == "weekly-report" and output_format == "xlsx":
             if not args.template:
                 raise InvalidArgsError("--template is required for weekly-report xlsx")
-            if not args.week_label:
-                raise InvalidArgsError("--week-label is required for weekly-report")
         if args.command == "reports" and args.reports_command == "monthly-audit" and output_format == "xlsx":
             if not args.month_label:
                 raise InvalidArgsError("--month-label is required for monthly-audit")
