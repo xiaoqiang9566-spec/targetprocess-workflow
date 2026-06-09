@@ -8,6 +8,7 @@ Prefer this input order:
 2. Existing `bug_master.json`
 3. Existing `bug_master.csv`
 4. Live CLI pull
+5. Layout reference from `docs/weekNN-template.xlsx` when the user does not provide a newer replacement template
 
 Typical bundle contents:
 
@@ -20,6 +21,11 @@ Typical bundle contents:
 
 When an existing `bug_master.json` is present, prefer it over a fresh live pull.
 
+Default workbook-layout rule:
+
+- Use `docs/weekNN-template.xlsx` as the canonical weekly report template reference for generation, repair, and validation unless the user explicitly provides a different replacement workbook.
+- When the generated workbook and `docs/weekNN-template.xlsx` disagree on visual shape, trust `docs/weekNN-template.xlsx`.
+
 ## NG3 Single-Sheet Weekly Report Formal Specification
 
 Treat this section as the source of truth for the single-sheet NG3 weekly report unless the user provides a newer template or an explicit replacement rule.
@@ -31,6 +37,7 @@ Treat this section as the source of truth for the single-sheet NG3 weekly report
   2. `NG3项目2026年固件有效bug检出&修复情况`
   3. `2026年NG3固件售后问题`
   4. `NG3存量Bug消减情况`
+- Use `docs/weekNN-template.xlsx` as the default workbook skeleton and formatting reference for this four-table NG3 weekly report unless the user explicitly provides a newer replacement workbook.
 - Prefer existing local bundle files over live pulls. Reuse `bug_master.json`, `bug_master.csv`, weekly output bundles, or workbook-side artifacts when they already contain the required scope.
 - Keep the workflow read-only. If live data is required, run `python -m tp_codex.cli healthcheck --format json` before large pulls.
 - For this weekly report, use the four-team scope:
@@ -74,6 +81,7 @@ Treat the template as a manual rebuild target when most of these cues are true:
 
 For this shape, do not blindly use the built-in weekly report generator. The current repo implementation in `src/tp_codex/weekly_reports.py` assumes the multi-product layout and can produce layout mismatches against a 42-row template.
 Default to producing a single-sheet `WeekNN` workbook rather than appending a second weekly sheet.
+When the user does not provide another workbook, assume this shape is defined by `docs/weekNN-template.xlsx`.
 
 ## Scope Pitfalls
 
@@ -402,7 +410,7 @@ The previous mistake was describing a default-scope weekly-new count such as `60
 
 ## Manual Rebuild Guidance For A 42-row NG3 Template
 
-Use the provided template as the only source of layout truth.
+Use `docs/weekNN-template.xlsx` as the default source of layout truth unless the user explicitly provides a newer replacement workbook.
 
 The weekly report contains exactly these four business tables. Preserve their names and order unless the user explicitly provides a different template:
 
