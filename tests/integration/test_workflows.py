@@ -1,4 +1,5 @@
 import io
+import re
 import zipfile
 from xml.etree import ElementTree as ET
 
@@ -800,9 +801,9 @@ def test_build_workbook_workflow_generates_expected_sheets_and_focus_tabs():
     assert any("unmapped" in row for row in team_status_rows)
 
 
-def test_weekly_report_workflow_appends_new_week_sheet_and_preserves_template_tabs(tmp_path):
+def test_weekly_report_workflow_builds_single_sheet_from_highest_week_template(tmp_path):
     template_path = tmp_path / "weekly-template.xlsx"
-    template_path.write_bytes(_weekly_template_bytes())
+    template_path.write_bytes(_weekly_template_with_out_of_order_week_sheets_bytes())
 
     gateway = MemoryGateway(
         entities={
@@ -889,20 +890,21 @@ def test_weekly_report_workflow_appends_new_week_sheet_and_preserves_template_ta
     assert result.summary["week_label"] == "Week23"
     assert result.summary["total_records"] == 3
     assert result.summary["weekly_new_records"] == 3
-    assert result.artifacts[0].filename == "weekly-report-Week23.xlsx"
+    assert result.artifacts[0].filename == "质量周报-Week23(2026.6.1-2026.6.7).xlsx"
 
     workbook_bytes = result.artifacts[0].content
-    assert _sheet_names(workbook_bytes) == [
-        "固件质量数据概览-Week22",
-        "数据总览-NG3",
-        "NG3每周解决缺陷",
-        "固件质量数据概览-Week23",
-    ]
+    assert _sheet_names(workbook_bytes) == ["固件质量数据概览-Week23"]
     assert _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "A1") == "固件质量报告2026-Week23"
-    assert _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "B13") == "1"
-    assert _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "B60") == "1"
-    assert _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "B121") == "1"
-    assert _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "A85") == "待人工补充"
+    assert _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "B9") == "3"
+    assert _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "B18") == "3"
+    assert _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "B30") == "1"
+    assert _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "A36") == "NG3存量Bug消减情况"
+    assert _worksheet_max_column(workbook_bytes, "固件质量数据概览-Week23") == 7
+    assert "Week23新增3个Bug" in _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "A3")
+    assert _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "A4") == "等级"
+    assert _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "A11") == "NG3项目2026年固件有效bug检出&修复情况"
+    assert _worksheet_rel_paths(workbook_bytes) == []
+    assert _worksheet_hyperlink_count(workbook_bytes, "固件质量数据概览-Week23") == 0
 
 
 def test_monthly_audit_workflow_builds_summary_and_candidates():
@@ -1211,6 +1213,68 @@ def _sheet_cell(workbook_bytes: bytes, sheet_name: str, cell_ref: str) -> str:
     raise AssertionError(f"cell not found: {sheet_name}!{cell_ref}")
 
 
+def _worksheet_rel_paths(workbook_bytes: bytes) -> list[str]:
+    with zipfile.ZipFile(io.BytesIO(workbook_bytes)) as archive:
+        return sorted(name for name in archive.namelist() if name.startswith("xl/worksheets/_rels/"))
+
+
+def _worksheet_hyperlink_count(workbook_bytes: bytes, sheet_name: str) -> int:
+    main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    rel_ns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    pkg_rel_ns = "http://schemas.openxmlformats.org/package/2006/relationships"
+    namespace = {"main": main_ns, "pkg": pkg_rel_ns}
+
+    with zipfile.ZipFile(io.BytesIO(workbook_bytes)) as archive:
+        workbook = ET.fromstring(archive.read("xl/workbook.xml"))
+        workbook_rels = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+        rel_map = {
+            rel.attrib["Id"]: rel.attrib["Target"]
+            for rel in workbook_rels.findall("pkg:Relationship", namespace)
+        }
+        for sheet in workbook.findall("main:sheets/main:sheet", namespace):
+            if sheet.attrib["name"] != sheet_name:
+                continue
+            target = rel_map[sheet.attrib[f"{{{rel_ns}}}id"]]
+            worksheet = ET.fromstring(archive.read(f"xl/{target}"))
+            return len(worksheet.findall("main:hyperlinks/main:hyperlink", namespace))
+    raise AssertionError(f"sheet not found: {sheet_name}")
+
+
+def _worksheet_max_column(workbook_bytes: bytes, sheet_name: str) -> int:
+    main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    rel_ns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    pkg_rel_ns = "http://schemas.openxmlformats.org/package/2006/relationships"
+    namespace = {"main": main_ns, "pkg": pkg_rel_ns}
+
+    with zipfile.ZipFile(io.BytesIO(workbook_bytes)) as archive:
+        workbook = ET.fromstring(archive.read("xl/workbook.xml"))
+        workbook_rels = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+        rel_map = {
+            rel.attrib["Id"]: rel.attrib["Target"]
+            for rel in workbook_rels.findall("pkg:Relationship", namespace)
+        }
+        for sheet in workbook.findall("main:sheets/main:sheet", namespace):
+            if sheet.attrib["name"] != sheet_name:
+                continue
+            target = rel_map[sheet.attrib[f"{{{rel_ns}}}id"]]
+            worksheet = ET.fromstring(archive.read(f"xl/{target}"))
+            max_column = 0
+            for cell in worksheet.findall(".//main:c", namespace):
+                ref = cell.attrib.get("r", "")
+                match = re.fullmatch(r"([A-Z]+)\d+", ref)
+                if match:
+                    max_column = max(max_column, _column_index(match.group(1)))
+            return max_column
+    raise AssertionError(f"sheet not found: {sheet_name}")
+
+
+def _column_index(label: str) -> int:
+    value = 0
+    for char in label:
+        value = value * 26 + (ord(char) - 64)
+    return value
+
+
 def _weekly_template_bytes() -> bytes:
     helper_sheet = WorkbookSheet(
         name="数据总览-NG3",
@@ -1227,124 +1291,119 @@ def _weekly_template_bytes() -> bytes:
     return _build_xlsx([weekly_sheet, helper_sheet, resolved_sheet], "2026-06-05T00:00:00+00:00")
 
 
+def _weekly_template_with_out_of_order_week_sheets_bytes() -> bytes:
+    week21 = WorkbookSheet(
+        name="固件质量数据概览-Week21",
+        rows=[WorkbookRow(["固件质量报告2026-Week21"], kind="title"), *[WorkbookRow([], kind="body") for _ in range(166)]],
+    )
+    week22 = WorkbookSheet(
+        name="固件质量数据概览-Week22",
+        rows=_weekly_template_rows(),
+    )
+    week17 = WorkbookSheet(
+        name="固件质量数据概览-Week17&Week18",
+        rows=[WorkbookRow(["固件质量报告2026 Week17-Week18"], kind="title"), *[WorkbookRow([], kind="body") for _ in range(166)]],
+    )
+    helper_sheet = WorkbookSheet(name="数据总览-NG3", rows=[WorkbookRow(["概览"], kind="title")])
+    workbook_bytes = _build_xlsx([week21, week22, helper_sheet, week17], "2026-06-05T00:00:00+00:00")
+    return _add_week22_hyperlink_relationship(workbook_bytes)
+
+
+def _add_week22_hyperlink_relationship(workbook_bytes: bytes) -> bytes:
+    main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    rel_ns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    pkg_rel_ns = "http://schemas.openxmlformats.org/package/2006/relationships"
+    namespace = {"main": main_ns, "pkg": pkg_rel_ns}
+
+    with zipfile.ZipFile(io.BytesIO(workbook_bytes)) as archive:
+        entries = {name: archive.read(name) for name in archive.namelist()}
+
+    workbook = ET.fromstring(entries["xl/workbook.xml"])
+    workbook_rels = ET.fromstring(entries["xl/_rels/workbook.xml.rels"])
+    rel_map = {
+        rel.attrib["Id"]: rel.attrib["Target"]
+        for rel in workbook_rels.findall("pkg:Relationship", namespace)
+    }
+    target = None
+    for sheet in workbook.findall("main:sheets/main:sheet", namespace):
+        if sheet.attrib["name"] == "固件质量数据概览-Week22":
+            target = rel_map[sheet.attrib[f"{{{rel_ns}}}id"]]
+            break
+    if target is None:
+        raise AssertionError("Week22 sheet missing from test template")
+
+    worksheet_path = f"xl/{target}"
+    worksheet = ET.fromstring(entries[worksheet_path])
+    hyperlinks = worksheet.find(f"{{{main_ns}}}hyperlinks")
+    if hyperlinks is None:
+        hyperlinks = ET.SubElement(worksheet, f"{{{main_ns}}}hyperlinks")
+    ET.SubElement(
+        hyperlinks,
+        f"{{{main_ns}}}hyperlink",
+        {"ref": "A156", f"{{{rel_ns}}}id": "rId1", "display": "old link"},
+    )
+    entries[worksheet_path] = ET.tostring(worksheet, encoding="utf-8", xml_declaration=True)
+    rels_path = f"xl/worksheets/_rels/{target.split('/')[-1]}.rels"
+    entries[rels_path] = (
+        b'<?xml version="1.0" encoding="UTF-8"?>'
+        b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        b'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.invalid/old" TargetMode="External"/>'
+        b"</Relationships>"
+    )
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, payload in entries.items():
+            archive.writestr(name, payload)
+    return output.getvalue()
+
+
 def _weekly_template_rows() -> list[WorkbookRow]:
     cells = {
         1: ["固件质量报告2026-Week22"],
-        2: ["NG3 版本发布情况"],
-        6: ["2026年NG3固件每周新增Bug"],
-        8: ["等级", "Bug总数", "待分析", "处理中", "已解决", "已验证", "异常闭环"],
-        9: ["Blocking", 0, 0, 0, 0, 0, 0],
-        10: ["Critical", 0, 0, 0, 0, 0, 0],
-        11: ["Major", 0, 0, 0, 0, 0, 0],
-        12: ["Normal", 0, 0, 0, 0, 0, 0],
-        13: ["总计", 0, 0, 0, 0, 0, 0],
-        15: ["NG3项目2026年固件有效bug检出&修复情况"],
-        17: ["等级", "总有效bug数", "待解决", "待验证", "非常规闭环单", "关闭率", "验证率"],
-        18: ["Blocking", 0, 0, 0, 0, 0, 0],
-        19: ["Critical", 0, 0, 0, 0, 0, 0],
-        20: ["Major", 0, 0, 0, 0, 0, 0],
-        21: ["Normal", 0, 0, 0, 0, 0, 0],
-        22: ["总计", 0, 0, 0, 0, 0, 0],
-        23: ["工作组", "B&C有效bug数", "待解决", "待验证", "非常规闭环单", "关闭率", "验证率"],
-        24: ["驱动", 0, 0, 0, 0, 0, 0],
-        25: ["框架", 0, 0, 0, 0, 0, 0],
-        26: ["UI", 0, 0, 0, 0, 0, 0],
-        27: ["2026年NG3固件售后问题"],
-        29: ["等级", "售后问题总数", "已关闭", "待关闭", "待验证", "非常规闭环", "关闭率"],
-        30: ["Blocking", 0, 0, 0, 0, 0, 0],
-        31: ["Critical", 0, 0, 0, 0, 0, 0],
-        32: ["Major", 0, 0, 0, 0, 0, 0],
-        33: ["Normal", 0, 0, 0, 0, 0, 0],
-        34: ["总计", 0, 0, 0, 0, 0, 0],
-        35: ["工组组", "Blocking响应周期>2天", "Blocking解决周期>7天", "Critical响应周期>7天", "Critical解决周期>21天", "问题处理方案"],
-        36: ["驱动", 0, 0, 0, 0, ""],
-        37: ["框架", 0, 0, 0, 0, ""],
-        38: ["UI", 0, 0, 0, 0, ""],
-        39: ["总计", 0, 0, 0, 0, ""],
-        40: ["NG3存量Bug消减情况"],
-        42: ["工作组", "Bug存量", "2026年关闭量", "待研发处理", "待复现", "待验证", "消减率"],
-        43: ["驱动", 0, 0, 0, 0, 0, 0],
-        44: ["框架", 0, 0, 0, 0, 0, 0],
-        45: ["UI", 0, 0, 0, 0, 0, 0],
-        46: ["总计", 0, 0, 0, 0, 0, 0],
-        48: ["Dilu 版本发布情况"],
-        53: ["2026年Dilu固件每周新增Bug"],
-        55: ["等级", "Bug总数", "客诉问题", "开发过程问题", "待处理", "处理中", "已解决&已闭环"],
-        56: ["致命", 0, 0, 0, 0, 0, 0],
-        57: ["严重", 0, 0, 0, 0, 0, 0],
-        58: ["一般", 0, 0, 0, 0, 0, 0],
-        59: ["提示", 0, 0, 0, 0, 0, 0],
-        60: ["总计", 0, 0, 0, 0, 0, 0],
-        62: ["2026年Dilu固件有效Bug修复情况"],
-        64: ["等级", "Bug总数", "待解决", "待验证", "非常规闭环单", "关闭率", "验证率"],
-        65: ["致命", 0, 0, 0, 0, 0, 0],
-        66: ["严重", 0, 0, 0, 0, 0, 0],
-        67: ["一般", 0, 0, 0, 0, 0, 0],
-        68: ["提示", 0, 0, 0, 0, 0, 0],
-        69: ["总计", 0, 0, 0, 0, 0, 0],
-        70: ["工作组", "Bug总数", "待解决", "待验证", "非常规闭环单", "关闭率", "验证率"],
-        71: ["驱动", 0, 0, 0, 0, 0, 0],
-        72: ["框架", 0, 0, 0, 0, 0, 0],
-        73: ["应用", 0, 0, 0, 0, 0, 0],
-        74: ["2026年Dilu 固件售后问题"],
-        76: ["等级", "售后问题总数", "正常闭环", "待解决", "待验证", "已拒绝", "关闭率"],
-        77: ["严重", 0, 0, 0, 0, 0, 0],
-        78: ["一般", 0, 0, 0, 0, 0, 0],
-        79: ["总计", 0, 0, 0, 0, 0, 0],
-        80: ["工组组", "＞15天的B&C问题", "＞45天的一般问题", "问题处理方案"],
-        81: ["驱动", 0, 0, ""],
-        82: ["框架", 0, 0, ""],
-        83: ["应用", 0, 0, ""],
-        84: ["总计", 0, 0, ""],
-        85: ["Dilu 固件全量DI值情况（2025年1月至今）"],
-        92: ["Dilu 固件版本DI值情况（2026年4月&6月版本）"],
-        100: ["心率带2版本发布情况"],
-        104: ["心率带2缺陷检出&修复情况"],
-        106: ["等级", "总计", "新", "处理中", "已解决", "已验证", "已拒绝"],
-        107: ["致命", 0, 0, 0, 0, 0, 0],
-        108: ["严重", 0, 0, 0, 0, 0, 0],
-        109: ["一般", 0, 0, 0, 0, 0, 0],
-        110: ["总计", 0, 0, 0, 0, 0, 0],
-        112: ["Core 2 版本发布情况"],
-        115: ["Core 2 缺陷检出&修复情况"],
-        117: ["等级", "总计", "新", "处理中", "已解决", "已验证", "已拒绝"],
-        118: ["致命", 0, 0, 0, 0, 0, 0],
-        119: ["严重", 0, 0, 0, 0, 0, 0],
-        120: ["一般", 0, 0, 0, 0, 0, 0],
-        121: ["总计", 0, 0, 0, 0, 0, 0],
-        122: ["模块", "总计", "新", "处理中", "已解决", "已验证", "已拒绝"],
-        123: ["UI/UX", 0, 0, 0, 0, 0, 0],
-        124: ["基线开发", 0, 0, 0, 0, 0, 0],
-        125: ["蓝牙", 0, 0, 0, 0, 0, 0],
-        126: ["驱动", 0, 0, 0, 0, 0, 0],
-        127: ["算法集成", 0, 0, 0, 0, 0, 0],
-        128: ["应用功能", 0, 0, 0, 0, 0, 0],
-        129: ["总计", 0, 0, 0, 0, 0, 0],
-        131: ["Run 2 版本发布情况"],
-        135: ["Run2 缺陷检出&修复情况"],
-        137: ["等级", "Bug总数", "待解决", "待验证", "非常规闭环单", "关闭率", "验证率"],
-        138: ["致命", 0, 0, 0, 0, 0, 0],
-        139: ["严重", 0, 0, 0, 0, 0, 0],
-        140: ["一般", 0, 0, 0, 0, 0, 0],
-        141: ["总计", 0, 0, 0, 0, 0, 0],
-        142: ["工作组", "Bug总数", "待解决", "待验证", "非常规闭环单", "关闭率", "验证率"],
-        143: ["驱动", 0, 0, 0, 0, 0, 0],
-        144: ["框架", 0, 0, 0, 0, 0, 0],
-        145: ["应用", 0, 0, 0, 0, 0, 0],
-        147: ["Race 3S/Race3 版本发布情况"],
-        156: ["Race 3S 缺陷检出&修复情况"],
-        158: ["等级", "Bug总数", "待解决", "待验证", "非常规闭环单", "关闭率", "验证率"],
-        159: ["致命", 0, 0, 0, 0, 0, 0],
-        160: ["严重", 0, 0, 0, 0, 0, 0],
-        161: ["一般", 0, 0, 0, 0, 0, 0],
-        162: ["提示", 0, 0, 0, 0, 0, 0],
-        163: ["总计", 0, 0, 0, 0, 0, 0],
-        164: ["工作组", "Bug总数", "待解决", "待验证", "非常规闭环单", "关闭率", "验证率"],
-        165: ["驱动", 0, 0, 0, 0, 0, 0],
-        166: ["框架", 0, 0, 0, 0, 0, 0],
-        167: ["UI", 0, 0, 0, 0, 0, 0],
+        2: ["2026年NG3固件每周新增Bug"],
+        3: ["旧周摘要"],
+        4: ["等级", "Bug总数", "New", "处理中", "已解决", "已验证", "异常闭环"],
+        5: ["Blocking", 0, 0, 0, 0, 0, 0],
+        6: ["Critical", 0, 0, 0, 0, 0, 0],
+        7: ["Major", 0, 0, 0, 0, 0, 0],
+        8: ["Normal", 0, 0, 0, 0, 0, 0],
+        9: ["总计", 0, 0, 0, 0, 0, 0],
+        10: ["各状态问题占比", "/", 0, 0, 0, 0, 0],
+        11: ["NG3项目2026年固件有效bug检出&修复情况"],
+        12: ["旧有效缺陷摘要"],
+        13: ["等级", "总bug数", "待解决", "待验证", "非常规闭环单", "关闭率", "验证率"],
+        14: ["Blocking", 0, 0, 0, 0, 0, 0],
+        15: ["Critical", 0, 0, 0, 0, 0, 0],
+        16: ["Major", 0, 0, 0, 0, 0, 0],
+        17: ["Normal", 0, 0, 0, 0, 0, 0],
+        18: ["总计", 0, 0, 0, 0, 0, 0],
+        19: ["工作组", "B&C bug数", "待解决", "待验证", "非常规闭环单", "关闭率", "验证率"],
+        20: ["驱动", 0, 0, 0, 0, 0, 0],
+        21: ["框架", 0, 0, 0, 0, 0, 0],
+        22: ["UI", 0, 0, 0, 0, 0, 0],
+        23: ["2026年NG3固件售后问题"],
+        24: ["旧售后摘要"],
+        25: ["等级", "售后问题总数", "已关闭", "待关闭", "待验证", "非常规闭环", "关闭率"],
+        26: ["Blocking", 0, 0, 0, 0, 0, 0],
+        27: ["Critical", 0, 0, 0, 0, 0, 0],
+        28: ["Major", 0, 0, 0, 0, 0, 0],
+        29: ["Normal", 0, 0, 0, 0, 0, 0],
+        30: ["总计", 0, 0, 0, 0, 0, 0],
+        31: ["工组组", "Blocking响应超期（>2天）", "Blocking解决超期（>7天）", "Critical响应超期（>7天）", "Critical解决超期（>21天）", "备注"],
+        32: ["驱动", 0, 0, 0, 0, ""],
+        33: ["框架", 0, 0, 0, 0, ""],
+        34: ["UI", 0, 0, 0, 0, ""],
+        35: ["总计", 0, 0, 0, 0, ""],
+        36: ["NG3存量Bug消减情况"],
+        37: ["旧存量摘要"],
+        38: ["工作组", "Bug存量", "2026年关闭量", "待研发处理", "待复现", "待验证", "消减率"],
+        39: ["驱动", 0, 0, 0, 0, 0, 0],
+        40: ["框架", 0, 0, 0, 0, 0, 0],
+        41: ["UI", 0, 0, 0, 0, 0, 0],
+        42: ["总计", 0, 0, 0, 0, 0, 0],
     }
     rows = []
-    for index in range(1, 168):
+    for index in range(1, 43):
         rows.append(WorkbookRow(cells.get(index, []), kind="body"))
     return rows

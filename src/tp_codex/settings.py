@@ -26,6 +26,7 @@ class WorkflowRulesSettings:
     reopen_threshold: int = 1
     default_scope: Dict[str, List[str]] = field(default_factory=dict)
     default_select: List[str] = field(default_factory=list)
+    weekly_report: Dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,7 @@ def load_settings(
             for key, value in dict(workflow_rules_raw.get("default_scope", {})).items()
         },
         default_select=[str(item) for item in workflow_rules_raw.get("default_select", [])],
+        weekly_report=dict(workflow_rules_raw.get("weekly_report", {}) or {}),
     )
     return Settings(
         base_url=_validate_base_url(base_url),

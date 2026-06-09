@@ -43,6 +43,17 @@ reopen_threshold: 2
 default_select:
   - Id
   - Team
+weekly_report:
+  product_sections:
+    NG3:
+      product_keywords: [ng3]
+      team_names: [ESW China NG3 Driver]
+      group_label: 驱动
+  di_weights:
+    Blocking: 10
+    Critical: 3
+    Major: 1
+    Normal: 0.1
 """.strip(),
         encoding="utf-8",
     )
@@ -56,3 +67,5 @@ default_select:
     assert settings.workflow_rules.high_risk_severities == ["Critical"]
     assert settings.workflow_rules.stale_days == 3
     assert settings.workflow_rules.default_select == ["Id", "Team"]
+    assert settings.workflow_rules.weekly_report["product_sections"]["NG3"]["product_keywords"] == ["ng3"]
+    assert settings.workflow_rules.weekly_report["di_weights"]["Normal"] == 0.1
