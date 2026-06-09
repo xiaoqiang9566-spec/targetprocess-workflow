@@ -7,7 +7,7 @@ description: Build, repair, or validate weekly QA report workbooks for this Targ
 
 ## Overview
 
-Create or repair weekly QA report workbooks for this repo while preserving the user's template shape. Prefer reusing an existing weekly output bundle over re-pulling live data.
+Create or repair weekly QA report workbooks for this repo while preserving the user's template shape. Unless the user explicitly provides a newer replacement workbook, use `docs/weekNN-template.xlsx` as the default and canonical weekly report template reference. Prefer reusing an existing weekly output bundle over re-pulling live data.
 
 ## Workflow
 
@@ -22,6 +22,7 @@ Create or repair weekly QA report workbooks for this repo while preserving the u
 2. Inspect the available inputs before generating anything.
 
 - Confirm the week label, template path, and requested output path.
+- If the user does not provide another template path, default the template reference to `docs/weekNN-template.xlsx`.
 - Inspect the bundle directory for `bug_master.json`, `bug_master.csv`, `run-metadata.json`, `send-summary.md`, and `healthcheck.json`.
 - Prefer `bug_master.json` because it already contains normalized `records`.
 - Use `bug_master.csv` for quick inspection or delivery, not as the primary reconstruction source.
@@ -29,6 +30,7 @@ Create or repair weekly QA report workbooks for this repo while preserving the u
 3. Classify the template before choosing a generation path.
 
 - Open the workbook and inspect sheet names, sheet count, row count, and merged ranges.
+- Treat `docs/weekNN-template.xlsx` as the repo's canonical NG3 weekly report template unless the user explicitly supplies a newer replacement template.
 - If the template matches the repo's multi-product weekly workbook pattern, use the built-in weekly report flow.
 - If the template is a single-sheet NG3 weekly workbook, rebuild directly from that template instead of blindly using the built-in generator.
 - Treat the NG3 weekly report page as four fixed tables: `2026年NG3固件每周新增Bug`, `NG3项目2026年固件有效bug检出&修复情况`, `2026年NG3固件售后问题`, and `NG3存量Bug消减情况`.
@@ -50,7 +52,7 @@ Create or repair weekly QA report workbooks for this repo while preserving the u
 
 - Reuse `bug_master.json` when it already exists.
 - Use `python -m tp_codex.cli reports weekly-report` only when the template shape is compatible with `src/tp_codex/weekly_reports.py`.
-- For template-driven rebuilds, preserve styles, merged cells, row heights, formulas, and existing layout; change only sheet names and cell values.
+- For template-driven rebuilds, preserve styles, merged cells, row heights, formulas, theme colors, and existing layout from `docs/weekNN-template.xlsx` or the user-provided replacement template; change only sheet names and cell values.
 - Do not append extra sheets unless the template pattern clearly expects historical weekly sheets.
 - If the template is a single-sheet weekly page, default to rewriting that page into the requested week instead of appending another sheet.
 - Replace manual-only sections with explicit placeholders or leave them untouched on purpose; never copy stale prior-week text by accident.
