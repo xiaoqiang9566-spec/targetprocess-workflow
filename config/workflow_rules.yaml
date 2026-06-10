@@ -23,6 +23,7 @@ default_scope:
     - ESW China NG3 Driver
     - ESW China NG3 Framework
     - ESW UI Team
+    - ESW WUI
 default_select:
   - Id
   - Name
@@ -50,31 +51,12 @@ weekly_report:
         - ESW China NG3 Driver
         - ESW China NG3 Framework
         - ESW UI Team
-    Dilu:
-      product_keywords:
-        - dilu
-    心率带2:
-      product_keywords:
-        - 心率带
-        - heart
-    Core 2:
-      product_keywords:
-        - core 2
-        - core2
-    Run 2:
-      product_keywords:
-        - run 2
-        - run2
-    Race 3S/Race3:
-      product_keywords:
-        - race 3s
-        - race3s
-        - race3
-        - race 3
+        - ESW WUI
   team_groups:
     ESW China NG3 Driver: 驱动
     ESW China NG3 Framework: 框架
     ESW UI Team: UI
+    ESW WUI: 框架
   di_weights:
     Blocking: 10
     Critical: 3

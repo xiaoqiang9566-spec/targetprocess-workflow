@@ -317,97 +317,100 @@ Do not invent issue owner names, highlighted problem titles, customer satisfacti
 
 ## Table 4: NG3存量Bug消减情况
 
-Use this rule set for the fourth table, `NG3存量Bug消减情况`.
+Use this rule set for the fourth table, NG3存量Bug消减情况.
 
 ### Data filter
 
-- Count 2026 firmware full bugs whose `CreateDate` falls from 2026-01-01 through 2026-12-31.
-- Prefer existing local data files, weekly bundle data, or `bug_master.json` when they already contain the required 2026 records. Do not re-pull live data just to regenerate this table.
-- If live data is required, run `healthcheck` first and keep the command read-only.
+- Stock bugs are defined as bugs created before the report year: CreateDate >= 2021-01-01 AND CreateDate <= 2025-12-31.
+- This table covers four derived dimensions from the stock bug population. All derived dimensions share the same CreateDate range [2021-01-01, 2025-12-31].
+- Do not use is_open or status_group as the stock bug filter. The stock definition is based solely on CreateDate range and the column-specific state and owner filters.
+- Prefer existing local data files, weekly bundle data, or ug_master.json when they already contain the required stock records. Do not re-pull live data just to regenerate this table.
+- If live data is required, run healthcheck first and keep the command read-only.
 
 ### Scope
 
 Filter to the four weekly-report teams:
 
-- `ESW China NG3 Driver`
-- `ESW China NG3 Framework`
-- `ESW UI Team`
-- `ESW WUI`
+- ESW China NG3 Driver
+- ESW China NG3 Framework
+- ESW UI Team
+- ESW WUI
 
-### Derived dimensions
+### Column filter definitions
 
-Use these additional filters for the table's derived columns. Apply the same creator exclusion rule to all four derived dimensions:
+Each column in the table has its own filter. The stock CreateDate range [2021-01-01, 2025-12-31] applies to all columns.
 
-- Excluded creators:
-  - `Lena Bergendahl`
-  - `Sami Järvinen`
-  - `Valtteri Mäki`
-- `2026年关闭量`: `State` in `Duplicate`, `Expired`, `Fixed`, `Invalid`, `Later`, `Verified`, `Wont fix`; `Last State Change Date` from `2026-01-01` through `2026-12-31`; `Creator` not in the excluded-creators list.
-- `待研发处理`: `State` in `Blocked`, `Design review`, `In Progress`, `In Review`, `New`, `Planned`, `Waiting for design`; `Last State Change Date` from `2026-01-01` through `2026-12-31`; `Creator` not in the excluded-creators list.
-- `待验证`: `State` in `In Testing`; `Last State Change Date` from `2026-01-01` through `2026-12-31`; `Creator` not in the excluded-creators list.
-- `待复现`: `State` in `Needs info`, `Reproduce`; `Last State Change Date` from `2026-01-01` through `2026-12-31`; `Creator` not in the excluded-creators list.
+**Bug存量** = 待研发处理 + 待复现 + 待验证 (sum of the three sub-columns).
 
-When local bundle data does not expose a normalized `Last State Change Date`, inspect the available state-change or modify-date fields before falling back. Do not silently substitute `CreateDate` for these derived dimensions.
+**2026年关闭量**:
+
+- CreateDate >= 2021-01-01 AND CreateDate <= 2025-12-31
+- LastStateChangeDate >= 2026-01-01 AND LastStateChangeDate <= 2026-12-31
+- State in Duplicate, Expired, Fixed, Invalid, Later, Verified, Wont fix
+- No creator exclusion for this column.
+
+**待研发处理**:
+
+- CreateDate >= 2021-01-01 AND CreateDate <= 2025-12-31
+- State in Blocked, Design review, In Progress, In Review, New, Planned, Waiting for design
+- Owner NOT IN Lena Bergendahl, Sami Järvinen, Valtteri Mäki
+
+**待验证**:
+
+- CreateDate >= 2021-01-01 AND CreateDate <= 2025-12-31
+- State in In Testing
+- Owner NOT IN Lena Bergendahl, Sami Järvinen, Valtteri Mäki
+
+**待复现**:
+
+- CreateDate >= 2021-01-01 AND CreateDate <= 2025-12-31
+- State in Needs info, Reproduce
+- Owner NOT IN Lena Bergendahl, Sami Järvinen, Valtteri Mäki
+
+### Excluded owners
+
+The following owners are excluded from 待研发处理, 待验证, and 待复现, but NOT from 2026年关闭量:
+
+- Lena Bergendahl
+- Sami Järvinen
+- Valtteri Mäki
 
 ### Team mapping
 
-Use the template's display rows. Typical display names are `驱动`, `框架`, `UI`, and `总计`.
+Use the template display rows. Typical display names are 驱动, 框架, UI, and 总计.
 
 Map teams as:
 
-- `驱动`: `ESW China NG3 Driver`
-- `框架`: `ESW China NG3 Framework`
-- `UI`: `ESW UI Team` + `ESW WUI`
+- 驱动: ESW China NG3 Driver
+- 框架: ESW China NG3 Framework + ESW WUI
+- UI: ESW UI Team
 
-Do not add a separate `WUI` row unless the template explicitly contains one. In this stock-reduction table, WUI should normally roll into the `UI` row.
+Do not add a separate WUI row unless the template explicitly contains one. In this stock-reduction table, WUI rolls into the 框架 row.
 
 ### Table layout and calculations
 
-- Preserve the template's visual style and table shape.
-- Columns should be: `工作组`, `Bug存量`, `2026年关闭量`, `待研发处理`, `待复现`, `待验证`, `消减率`.
-- `Bug存量` is the 2026 full-bug population after the table's date and scope filters, grouped by team row.
-- `2026年关闭量`, `待研发处理`, `待复现`, and `待验证` are the filtered counts from the derived dimensions above.
-- `总计` sums each numeric count column across the displayed team rows.
-- `消减率` = `2026年关闭量` / (`Bug存量` + `2026年关闭量`).
-- If the denominator is zero, leave the rate blank or use the template's existing zero-value convention.
+- Preserve the template visual style and table shape.
+- Columns: 工作组, Bug存量, 2026年关闭量, 待研发处理, 待复现, 待验证, 消减率.
+- Bug存量 = 待研发处理 + 待复现 + 待验证 per team row. This is a derived sum, not an independent count.
+- 2026年关闭量, 待研发处理, 待复现, and 待验证 are the filtered counts from the column definitions above.
+- 总计 sums each numeric count column across the displayed team rows.
+- 消减率 = 2026年关闭量 / (Bug存量 + 2026年关闭量).
+- If the denominator is zero, leave the rate blank or use the template existing zero-value convention.
 - Keep rates as numeric percentage values so Excel formatting remains intact.
 
 ### Summary text
 
-Before the table, write a concise 3-5 point analysis of 2026 firmware full bugs.
+Before the table, write a concise 3-5 point analysis of the NG3 stock bug situation.
 
 The summary should usually cover:
 
-- Current NG3 stock bug total and the team distribution across Driver, Framework, and UI.
+- Current NG3 stock bug total (Bug存量) and the team distribution across 驱动, 框架, and UI.
 - Total 2026 closed volume and the team distribution across the displayed rows.
-- Current stock composition across `待研发处理`, `待复现`, and `待验证`.
+- Current stock composition across 待研发处理, 待复现, and 待验证.
 - Overall stock reduction rate and the highest or lowest team reduction rate when the data supports it.
 - Dashboard or tracking-link references only when the template already contains them or the user explicitly provides them.
 
 Do not invent issue owner names, highlighted problem titles, dashboard URLs, targets, or @mentions. Only include them when they are present in the source data, template notes, or explicit user instruction.
-
-### NG3 platform scope versus NG3 legacy product
-
-The default live pull for this project is usually scoped to the three NG3-platform teams:
-
-- `ESW China NG3 Driver`
-- `ESW China NG3 Framework`
-- `ESW UI Team`
-
-That scope means "NG3 platform team data". It does not automatically mean the `NG3` product section in the weekly report.
-
-For weekly reporting:
-
-- `Race 3S/Race3` is an NG3-platform new product and must be counted as its own product section.
-- `NG3` should mean the NG3 legacy product-model collection.
-- Always inspect `products` before reporting a number as `NG3`.
-- If a record has empty or unrecognized `products`, keep it in a review bucket or explicitly state that the historical team fallback was used.
-
-The previous mistake was describing a default-scope weekly-new count such as `60` as `NG3 本周新增 60`. The correct wording is either:
-
-- `NG3 平台三团队本周新增 60，需按 Products 继续拆分`
-- `NG3 老产品本周新增 N，Race 3S/Race3 本周新增 M`
-
 ## Manual Rebuild Guidance For A 42-row NG3 Template
 
 Use `docs/weekNN-template.xlsx` as the default source of layout truth unless the user explicitly provides a newer replacement workbook.

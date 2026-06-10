@@ -40,7 +40,7 @@ DEFAULT_WEEKLY_REPORT_CONFIG = {
     "product_sections": {
         "NG3": {
             "product_keywords": ["ng3"],
-            "team_names": ["ESW China NG3 Driver", "ESW China NG3 Framework", "ESW UI Team"],
+            "team_names": ["ESW China NG3 Driver", "ESW China NG3 Framework", "ESW UI Team", "ESW WUI"],
         },
         "Dilu": {"product_keywords": ["dilu"]},
         "心率带2": {"product_keywords": ["心率带", "heart"]},
@@ -52,6 +52,7 @@ DEFAULT_WEEKLY_REPORT_CONFIG = {
         "ESW China NG3 Driver": "驱动",
         "ESW China NG3 Framework": "框架",
         "ESW UI Team": "UI",
+        "ESW WUI": "框架",
     },
     "di_weights": {
         "Blocking": 10,
@@ -486,26 +487,70 @@ def _fill_ng3_customer_block(sheet, records: Sequence[dict], context: WeekContex
     )
 
 
-def _fill_ng3_stock_block(sheet, records: Sequence[dict], context: WeekContext, config: dict) -> None:
-    backlog_records = [record for record in records if record.get("is_open")]
-    group_backlog = {label: [record for record in backlog_records if _group_label(record, config) == label] for label in ["驱动", "框架", "UI"]}
-    closed_year_records = [record for record in records if _closed_in_year(record, context.report_year)]
-    group_closed_year = {label: [record for record in closed_year_records if _group_label(record, config) == label] for label in ["驱动", "框架", "UI"]}
-    pending_dev_records = [record for record in backlog_records if _status_bucket_effective(record) == "pending"]
-    group_pending_dev = {label: [record for record in pending_dev_records if _group_label(record, config) == label] for label in ["驱动", "框架", "UI"]}
-    reproduce_records = [record for record in backlog_records if "reproduce" in str(record.get("status_raw") or "").lower()]
-    group_reproduce = {label: [record for record in reproduce_records if _group_label(record, config) == label] for label in ["驱动", "框架", "UI"]}
-    pending_verify_records = [record for record in backlog_records if _status_bucket_effective(record) == "pending_verification"]
-    group_pending_verify = {label: [record for record in pending_verify_records if _group_label(record, config) == label] for label in ["驱动", "框架", "UI"]}
+def _is_stock_bug(record: dict, report_year: int) -> bool:
+    """Stock bug = created in [2021, report_year)."""
+    created_year = _record_year(record.get("created_at") or record.get("created_date") or "")
+    if created_year is None:
+        return False
+    return 2021 <= created_year < report_year
 
-    backlog_total = len(backlog_records)
-    closed_year_total = len(closed_year_records)
+
+_EXCLUDED_OWNERS = {"lena bergendahl", "sami järvinen", "valtteri mäki"}
+
+_CLOSED_STATES = {"duplicate", "expired", "fixed", "invalid", "later", "verified", "wont fix", "won't fix"}
+
+_PENDING_DEV_STATES = {"blocked", "design review", "in progress", "in review", "new", "planned", "waiting for design"}
+
+_PENDING_VERIFY_STATES = {"in testing"}
+
+_REPRODUCE_STATES = {"needs info", "reproduce"}
+
+
+def _is_excluded_owner(record: dict) -> bool:
+    """Owner is in the excluded list (non-NG3 QA)."""
+    owner = str(record.get("owner") or "").strip().lower()
+    return owner in _EXCLUDED_OWNERS
+
+
+def _status_raw_lower(record: dict) -> str:
+    return str(record.get("status_raw") or "").strip().lower()
+
+
+def _is_closed_stock(record: dict, report_year: int) -> bool:
+    """Closed stock: created in [2021, report_year), LastStateChangeDate in report_year, state in closed set."""
+    if not _is_stock_bug(record, report_year):
+        return False
+    if _status_raw_lower(record) not in _CLOSED_STATES:
+        return False
+    changed_year = _record_year(record.get("last_status_change_at") or "")
+    return changed_year == report_year
+
+
+def _fill_ng3_stock_block(sheet, records: Sequence[dict], context: WeekContext, config: dict) -> None:
+    stock_records = [r for r in records if _is_stock_bug(r, context.report_year)]
+    _no_exclude = lambda r: not _is_excluded_owner(r)
+    pending_dev_records = [r for r in stock_records if _status_raw_lower(r) in _PENDING_DEV_STATES and _no_exclude(r)]
+    reproduce_records = [r for r in stock_records if _status_raw_lower(r) in _REPRODUCE_STATES and _no_exclude(r)]
+    pending_verify_records = [r for r in stock_records if _status_raw_lower(r) in _PENDING_VERIFY_STATES and _no_exclude(r)]
+    closed_year_records = [r for r in stock_records if _is_closed_stock(r, context.report_year)]
+
+    group_pending_dev = {label: [r for r in pending_dev_records if _group_label(r, config) == label] for label in ["驱动", "框架", "UI"]}
+    group_reproduce = {label: [r for r in reproduce_records if _group_label(r, config) == label] for label in ["驱动", "框架", "UI"]}
+    group_pending_verify = {label: [r for r in pending_verify_records if _group_label(r, config) == label] for label in ["驱动", "框架", "UI"]}
+    group_closed_year = {label: [r for r in closed_year_records if _group_label(r, config) == label] for label in ["驱动", "框架", "UI"]}
+
     pending_dev_total = len(pending_dev_records)
     reproduce_total = len(reproduce_records)
     pending_verify_total = len(pending_verify_records)
+    backlog_total = pending_dev_total + reproduce_total + pending_verify_total
+    closed_year_total = len(closed_year_records)
+
+    # Group backlog = sum of sub-columns per group
+    group_backlog = {label: len(group_pending_dev[label]) + len(group_reproduce[label]) + len(group_pending_verify[label]) for label in ["驱动", "框架", "UI"]}
+
     sheet["A37"] = (
-        f"1、NG3当前存量Bug为{backlog_total}个，驱动{len(group_backlog['驱动'])}个，框架{len(group_backlog['框架'])}个，"
-        f"UI {len(group_backlog['UI'])}个，存量Bug的整体消减率{_percent_text(_ratio(closed_year_total, backlog_total + closed_year_total))}。\n"
+        f"1、NG3当前存量Bug为{backlog_total}个，驱动{group_backlog['驱动']}个，框架{group_backlog['框架']}个，"
+        f"UI {group_backlog['UI']}个，存量Bug的整体消减率{_percent_text(_ratio(closed_year_total, backlog_total + closed_year_total))}。\n"
         f"2、NG3在{context.report_year}年推进闭环的Bug总量是{backlog_total + closed_year_total}个，驱动{len(group_closed_year['驱动'])}个，"
         f"框架{len(group_closed_year['框架'])}个，UI {len(group_closed_year['UI'])}个。\n"
         f"3、当前Bug存量中，待研发处理问题{pending_dev_total}个，待复现问题{reproduce_total}个，待验证问题{pending_verify_total}个。\n"
@@ -514,7 +559,7 @@ def _fill_ng3_stock_block(sheet, records: Sequence[dict], context: WeekContext, 
         "“消减率”=2026年关闭量/（Bug存量+2026年关闭量）"
     )
     for row, label in zip(range(39, 42), ["驱动", "框架", "UI"]):
-        backlog_count = len(group_backlog[label])
+        backlog_count = group_backlog[label]
         closed_year_count = len(group_closed_year[label])
         pending_dev_count = len(group_pending_dev[label])
         reproduce_count = len(group_reproduce[label])
