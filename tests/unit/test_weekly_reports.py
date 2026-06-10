@@ -111,6 +111,104 @@ def test_append_weekly_sheet_rewrites_existing_target_week_sheet():
     assert sheet["B9"].value == 2
 
 
+def test_append_weekly_sheet_includes_wui_scope_and_rolls_it_into_framework_rows():
+    template = _build_xlsx(
+        [
+            WorkbookSheet(
+                name="固件质量数据概览-Week23",
+                rows=_weekly_template_rows("Week23新增61个Bug", 61),
+            )
+        ],
+        "2026-06-05T00:00:00+00:00",
+    )
+    context = weekly_reports.resolve_week_context("Week23", "2026-06-08T03:58:27.648398+00:00")
+    records = [
+        {
+            "bug_id": 1,
+            "name": "Driver blocking",
+            "team": "ESW China NG3 Driver",
+            "products": [],
+            "severity": "Blocking",
+            "status_raw": "New",
+            "status_group": "triage",
+            "created_at": "2026-06-02 10:00:00",
+            "created_week": "2026-W23",
+            "is_customer_feedback": False,
+            "is_open": True,
+            "is_closed": False,
+            "url": "https://example.com/1",
+        },
+        {
+            "bug_id": 2,
+            "name": "WUI critical",
+            "team": "ESW WUI",
+            "products": [],
+            "severity": "Critical",
+            "status_raw": "In Progress",
+            "status_group": "in_progress",
+            "created_at": "2026-06-03 10:00:00",
+            "created_week": "2026-W23",
+            "is_customer_feedback": False,
+            "is_open": True,
+            "is_closed": False,
+            "url": "https://example.com/2",
+        },
+        {
+            "bug_id": 3,
+            "name": "WUI customer feedback",
+            "team": "ESW WUI",
+            "products": [],
+            "severity": "Major",
+            "status_raw": "Verified",
+            "status_group": "closed",
+            "created_at": "2026-06-04 10:00:00",
+            "created_week": "2026-W23",
+            "is_customer_feedback": True,
+            "is_open": False,
+            "is_closed": True,
+            "url": "https://example.com/3",
+        },
+        {
+            "bug_id": 4,
+            "name": "Historic WUI verified stock bug",
+            "team": "ESW WUI",
+            "products": [],
+            "severity": "Major",
+            "status_raw": "Verified",
+            "status_group": "closed",
+            "created_at": "2025-06-04 10:00:00",
+            "created_week": "2025-W23",
+            "last_status_change_at": "2026-06-04 10:00:00",
+            "is_customer_feedback": False,
+            "is_open": False,
+            "is_closed": True,
+            "url": "https://example.com/4",
+        },
+    ]
+    weekly_records = records[:3]
+
+    workbook_bytes = weekly_reports.append_weekly_sheet(
+        template,
+        records,
+        context,
+        weekly_records=weekly_records,
+    )
+
+    workbook = load_workbook(BytesIO(workbook_bytes))
+    sheet = workbook["固件质量数据概览-Week23"]
+    assert "框架2个" in str(sheet["A3"].value)
+    assert sheet["B9"].value == 3
+    assert sheet["A21"].value == "框架"
+    assert sheet["B21"].value == 1
+    assert sheet["A34"].value == "UI"
+    assert sheet["B34"].value == 0
+    assert sheet["D34"].value == 0
+    assert sheet["E34"].value == 0
+    assert sheet["A40"].value == "框架"
+    assert sheet["B40"].value == 0
+    assert sheet["C40"].value == 1
+
+
 def test_effective_bug_table_uses_allowed_states_and_excludes_customer_feedback_duplicate_invalid():
     template = _build_xlsx(
         [

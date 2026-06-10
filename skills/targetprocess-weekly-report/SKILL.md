@@ -37,7 +37,7 @@ Create or repair weekly QA report workbooks for this repo while preserving the u
 - For `2026年NG3固件每周新增Bug`, apply the previous-week `CreateDate` filter, four-team weekly report scope, summary bullets, and status buckets defined in `references/workflow.md`.
 - For `NG3项目2026年固件有效bug检出&修复情况`, apply the 2026 `CreateDate` filter, effective-bug exclusions, four-team weekly report scope, status summary table, team summary table, and rate formulas defined in `references/workflow.md`.
 - For `2026年NG3固件售后问题`, apply the 2026 `CreateDate` filter, `Customer feedback` name inclusion, four-team weekly report scope, severity summary table, team summary table, and closure-rate rules defined in `references/workflow.md`.
-- For `NG3存量Bug消减情况`, apply the 2026 full-bug `CreateDate` filter, the creator exclusion rule, the four derived state buckets, and the stock-reduction formula defined in `references/workflow.md`.
+- For `NG3存量Bug消减情况`, apply the stock-bug `CreateDate` filter (CreateDate in [2021, report_year)), the creator exclusion rule (owner not in {Lena Bergendahl, Sami Järvinen, Valtteri Mäki}), the four derived state buckets, and the stock-reduction formula defined in `references/workflow.md`.
 - When the template and the existing generator disagree, trust the template.
 
 4. Choose the data scope that matches the template, not just the team scope.

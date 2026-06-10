@@ -907,6 +907,121 @@ def test_weekly_report_workflow_builds_single_sheet_from_highest_week_template(t
     assert _worksheet_hyperlink_count(workbook_bytes, "固件质量数据概览-Week23") == 0
 
 
+def test_weekly_report_workflow_includes_wui_in_scope_and_rolls_into_framework_row(tmp_path):
+    template_path = tmp_path / "weekly-template.xlsx"
+    template_path.write_bytes(_weekly_template_bytes())
+
+    gateway = MemoryGateway(
+        entities={
+            "Bug": [
+                {
+                    "Id": 201,
+                    "Name": "Driver issue",
+                    "EntityType": {"Name": "Bug"},
+                    "Severity": {"Name": "Blocking"},
+                    "Priority": {"Name": "High"},
+                    "EntityState": {"Name": "New"},
+                    "Owner": {"FirstName": "QA", "LastName": "User"},
+                    "Project": {"Name": "Suunto work"},
+                    "Team": {"Name": "ESW China NG3 Driver"},
+                    "Products": [],
+                    "CreateDate": "2026-06-02T00:00:00+00:00",
+                    "ModifyDate": "2026-06-03T00:00:00+00:00",
+                    "LastStateChangeDate": "2026-06-03T00:00:00+00:00",
+                    "ReopenCount": 0,
+                    "Tags": [],
+                },
+                {
+                    "Id": 202,
+                    "Name": "WUI issue",
+                    "EntityType": {"Name": "Bug"},
+                    "Severity": {"Name": "Critical"},
+                    "Priority": {"Name": "High"},
+                    "EntityState": {"Name": "In Progress"},
+                    "Owner": {"FirstName": "QA", "LastName": "User"},
+                    "Project": {"Name": "Suunto work"},
+                    "Team": {"Name": "ESW WUI"},
+                    "Products": [],
+                    "CreateDate": "2026-06-03T00:00:00+00:00",
+                    "ModifyDate": "2026-06-03T00:00:00+00:00",
+                    "LastStateChangeDate": "2026-06-03T00:00:00+00:00",
+                    "ReopenCount": 0,
+                    "Tags": [],
+                },
+                {
+                    "Id": 203,
+                    "Name": "WUI customer feedback",
+                    "EntityType": {"Name": "Bug"},
+                    "Severity": {"Name": "Major"},
+                    "Priority": {"Name": "Medium"},
+                    "EntityState": {"Name": "Verified"},
+                    "Owner": {"FirstName": "QA", "LastName": "User"},
+                    "Project": {"Name": "Suunto work"},
+                    "Team": {"Name": "ESW WUI"},
+                    "Products": [],
+                    "CreateDate": "2026-06-04T00:00:00+00:00",
+                    "ModifyDate": "2026-06-04T00:00:00+00:00",
+                    "LastStateChangeDate": "2026-06-04T00:00:00+00:00",
+                    "ReopenCount": 0,
+                    "Tags": [{"Name": "customer feedback"}],
+                },
+                {
+                    "Id": 204,
+                    "Name": "Historic WUI verified stock bug",
+                    "EntityType": {"Name": "Bug"},
+                    "Severity": {"Name": "Major"},
+                    "Priority": {"Name": "Medium"},
+                    "EntityState": {"Name": "Verified"},
+                    "Owner": {"FirstName": "QA", "LastName": "User"},
+                    "Project": {"Name": "Suunto work"},
+                    "Team": {"Name": "ESW WUI"},
+                    "Products": [],
+                    "CreateDate": "2025-06-04T00:00:00+00:00",
+                    "ModifyDate": "2026-06-04T00:00:00+00:00",
+                    "LastStateChangeDate": "2026-06-04T00:00:00+00:00",
+                    "ReopenCount": 0,
+                    "Tags": [],
+                },
+            ]
+        }
+    )
+    settings = Settings(
+        base_url="https://example.tpondemand.com",
+        auth=AuthSettings(mode="access_token", secret="token"),
+        workflow_rules=WorkflowRulesSettings(
+            status_groups={"triage": ["New"], "in_progress": ["In Progress"], "closed": ["Verified"]},
+            high_risk_severities=["Critical"],
+            stale_days=5,
+            default_scope={
+                "project": ["Suunto work"],
+                "team": ["ESW China NG3 Driver", "ESW China NG3 Framework", "ESW UI Team", "ESW WUI"],
+            },
+        ),
+    )
+    service = TargetprocessService(settings=settings, gateway=gateway)
+
+    result = service.run_workflow(
+        "weekly-report",
+        entity="Bug",
+        filters={
+            "week_label": "Week23",
+            "template_path": str(template_path),
+        },
+    )
+
+    assert result.workflow == "weekly-report"
+    assert result.summary["total_records"] == 4
+    assert result.summary["weekly_new_records"] == 3
+    workbook_bytes = result.artifacts[0].content
+    assert _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "B9") == "3"
+    assert "框架2个" in _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "A3")
+    assert _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "A21") == "框架"
+    assert _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "B21") == "1"
+    assert _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "A40") == "框架"
+    assert _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "B40") == "0"
+    assert _sheet_cell(workbook_bytes, "固件质量数据概览-Week23", "C40") == "1"
+
+
 def test_monthly_audit_workflow_builds_summary_and_candidates():
     gateway = MemoryGateway(
         entities={
